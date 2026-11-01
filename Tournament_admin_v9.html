@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tournament Admin</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+:root { --bg:#0F172A; --panel:#1E293B; --line:#334155; --text:#E2E8F0; --muted:#94A3B8; --accent:#FACC15; }
+body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; padding-bottom: 40px; }
+.card-x { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.form-control, .form-select, textarea { background: var(--bg) !important; color: var(--text) !important; border: 1px solid var(--line) !important; }
+.form-control:focus, .form-select:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 .2rem rgba(250,204,21,.2) !important; }
+.form-label { color: var(--muted); font-size: .85rem; margin-bottom: 2px; }
+.modal-content { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.modal-header, .modal-footer { border-color: var(--line); }
+.btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+.btn-acc { background: linear-gradient(to right, #FACC15, #FBBF24); color: #0F172A; font-weight: 600; border: none; }
+.btn-acc:hover { filter: brightness(1.1); color: #0F172A; }
+.table { --bs-table-bg: transparent; --bs-table-color: var(--text); --bs-table-border-color: var(--line); font-size: .88rem; }
+.table-responsive { max-height: 70vh; }
+.topbar { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 50; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 12px; scrollbar-width: thin; }
+.tabs button { white-space: nowrap; background: var(--bg); color: var(--muted); border: 1px solid var(--line); border-radius: 20px; padding: 6px 14px; font-size: .85rem; }
+.tabs button.active { background: var(--accent); color: #0F172A; border-color: var(--accent); font-weight: 600; }
+.bdg { background:#EF4444; color:#fff; border-radius:10px; padding:0 6px; margin-left:4px; font-size:.7rem; display:none; }
+.stat { text-align: center; } .stat b { display: block; font-size: 1.5rem; color: var(--accent); } .stat span { font-size: .75rem; color: var(--muted); }
+.pill { font-size: .7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: capitalize; }
+.p-upcoming,.p-pending,.p-open { background: rgba(245,158,11,.2); color: #F59E0B; } .p-ongoing { background: rgba(59,130,246,.2); color: #60A5FA; }
+.p-completed,.p-approved,.p-resolved { background: rgba(16,185,129,.2); color: #10B981; } .p-rejected,.p-closed,.p-cancelled,.p-banned { background: rgba(239,68,68,.2); color: #EF4444; }
+.pane { display: none; } .pane.active { display: block; }
+#toastBox { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast-x { background: var(--panel); border: 1px solid var(--line); padding: 10px 18px; border-radius: 22px; box-shadow: 0 6px 20px rgba(0,0,0,.4); font-size: .9rem; }
+.toast-x.ok { border-color: #10B981; } .toast-x.err { border-color: #EF4444; }
+.prev { background: var(--bg); border: 1px dashed var(--line); border-radius: 10px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.75rem; overflow:hidden; }
+.prev img { width:100%; height:100%; object-fit:cover; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginView" class="container" style="max-width:420px; margin-top:12vh;">
+  <div class="card-x">
+    <h4 class="text-center mb-3"><i class="bi bi-shield-lock-fill" style="color:var(--accent)"></i> Admin Login</h4>
+    <div class="mb-3"><label class="form-label">Email</label><input type="email" id="lEmail" class="form-control"></div>
+    <div class="mb-3"><label class="form-label">Password</label><input type="password" id="lPass" class="form-control"></div>
+    <div id="lMsg" class="small text-danger mb-2"></div>
+    <button class="btn btn-acc w-100" id="lBtn">Login</button>
+    <button class="btn btn-link btn-sm w-100 mt-2" id="lForgot" style="color:var(--muted)">Forgot password?</button>
+    <p class="small mt-2 mb-0" style="color:var(--muted)">Only users with <code>isAdmin: true</code> in Firebase (users/&lt;uid&gt;) can enter.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appView" style="display:none;">
+  <div class="topbar">
+    <div class="d-flex justify-content-between align-items-center px-3 pt-2">
+      <strong><i class="bi bi-controller" style="color:var(--accent)"></i> Tournament Admin</strong>
+      <span><button class="btn btn-sm btn-outline-light" id="pwBtn" title="Password reset email"><i class="bi bi-key"></i></button> <button class="btn btn-sm btn-outline-light" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Logout</button></span>
+    </div>
+    <div class="tabs" id="tabs">
+      <button data-tab="dashboard" class="active">Dashboard</button><button data-tab="tournaments">Tournaments</button>
+      <button data-tab="users">Users</button>
+      <button data-tab="deposits">Deposits<span class="bdg" id="bd-deposits"></span></button>
+      <button data-tab="withdrawals">Withdrawals<span class="bdg" id="bd-withdrawals"></span></button>
+      <button data-tab="notify">Notifications</button><button data-tab="coupons">Coupons</button>
+      <button data-tab="content">Games &amp; Banners</button>
+      <button data-tab="support">Support<span class="bdg" id="bd-support"></span></button>
+      <button data-tab="kyc">KYC<span class="bdg" id="bd-kyc"></span></button><button data-tab="proofs">Proofs<span class="bdg" id="bd-proofs"></span></button><button data-tab="fraud">Fraud<span class="bdg" id="bd-fraud"></span></button><button data-tab="sched">Repeat</button><button data-tab="ops">Rewards ops</button><button data-tab="admins">Admins</button>
+      <button data-tab="settings">Settings</button><button data-tab="logs">Admin Logs</button>
+    </div>
+  </div>
+
+  <div class="container-fluid p-3" style="max-width:1200px;">
+    <!-- Dashboard -->
+    <div class="pane active" id="pane-dashboard"><div class="card-x"><div class="row g-3" id="dashStats"></div><button class="btn btn-outline-warning btn-sm mt-3" id="lbBtn">🏆 Leaderboard (Top 20)</button></div>
+      <div class="card-x"><h6>Last 14 days</h6><div class="small mb-1" style="color:var(--muted)"><span style="color:#10B981">■</span> Deposits ₹ &nbsp; <span style="color:#EF4444">■</span> Withdrawals ₹</div><canvas id="chMoney" style="width:100%;height:170px"></canvas><div class="small mt-3 mb-1" style="color:var(--muted)"><span style="color:#FACC15">■</span> New users</div><canvas id="chUsers" style="width:100%;height:170px"></canvas></div></div>
+
+    <!-- Tournaments -->
+    <div class="pane" id="pane-tournaments">
+      <div class="card-x">
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+          <input id="tSearch" class="form-control" style="max-width:200px" placeholder="Search name"><select id="tFilter" class="form-select" style="max-width:200px"><option value="">All status</option><option>upcoming</option><option>ongoing</option><option>completed</option><option>cancelled</option></select>
+          <button class="btn btn-outline-danger" id="autoCxBtn" title="Start time nikal gaya aur min players poore nahi">Auto-cancel under-filled</button> <button class="btn btn-outline-success" id="autoStartBtn" title="Start time nikal gaya, players poore hain">Start due matches</button> <button class="btn btn-acc" id="newTBtn"><i class="bi bi-plus-circle"></i> New Tournament</button>
+        </div>
+        <div class="table-responsive"><table class="table"><thead><tr><th>Name</th><th>Game</th><th>Map</th><th>Status</th><th>Start</th><th>Players</th><th>Actions</th></tr></thead><tbody id="tBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Users -->
+    <div class="pane" id="pane-users">
+      <div class="card-x">
+        <div class="row g-2 mb-3"><div class="col-8"><input id="uSearch" class="form-control" placeholder="Search by email / name / IGN (last 500 users)"></div>
+        <div class="col-4"><select id="uFilter" class="form-select"><option value="">All</option><option value="banned">Banned only</option></select></div></div>
+        <button class="btn btn-outline-light btn-sm mb-2" id="uCsv"><i class="bi bi-download"></i> Export users CSV</button>
+        <div class="input-group mb-2" style="max-width:420px"><input id="qBan" class="form-control" placeholder="Quick ban: email ya UID"><button class="btn btn-danger" id="qBanBtn"><i class="bi bi-slash-circle"></i> Ban</button></div>
+        <div class="table-responsive"><table class="table"><thead><tr><th>Name / IGN</th><th>Email</th><th>Balance</th><th>Winning</th><th>Bonus</th><th>Matches</th><th></th></tr></thead><tbody id="uBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Deposits -->
+    <div class="pane" id="pane-deposits">
+      <div class="card-x">
+        <p class="small" style="color:var(--muted)">User jab "Add Amount" me UTR submit kare to request yaha aayegi (node: <code>deposits</code>). UTR check karke Approve karo, balance auto add ho jayega.</p>
+        <select id="dFilter" class="form-select mb-3" style="max-width:200px"><option>pending</option><option>approved</option><option>rejected</option><option value="">All</option></select>
+        <div class="table-responsive"><table class="table"><thead><tr><th>User</th><th>Amount</th><th>UTR</th><th>Requested</th><th>Status</th><th></th></tr></thead><tbody id="dBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Withdrawals -->
+    <div class="pane" id="pane-withdrawals">
+      <div class="card-x">
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <select id="wFilter" class="form-select" style="max-width:200px"><option>pending</option><option>approved</option><option>rejected</option><option value="">All</option></select>
+          <button class="btn btn-outline-light" id="wCsv"><i class="bi bi-download"></i> Export CSV</button>
+        </div>
+        <div class="table-responsive"><table class="table"><thead><tr><th>User</th><th>Amount</th><th>Pay to</th><th>Requested</th><th>Status / UTR</th><th></th></tr></thead><tbody id="wBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="pane" id="pane-notify">
+      <div class="card-x">
+        <div class="row g-2"><div class="col-md-4"><label class="form-label">Title</label><input id="nTitle" class="form-control" maxlength="80"></div>
+        <div class="col-md-8"><label class="form-label">Message</label><textarea id="nMsg" class="form-control" rows="2" maxlength="500"></textarea></div></div>
+        <input id="nTo" class="form-control mt-2" placeholder="Sirf ek user ko? Email ya UID (khali = sabko)"><button class="btn btn-acc mt-3" id="nSend"><i class="bi bi-send-fill"></i> Send</button>
+      </div>
+      <div class="card-x"><h6>Recent notifications</h6><div id="nList"></div></div>
+    </div>
+
+    <!-- Coupons -->
+    <div class="pane" id="pane-coupons">
+      <div class="card-x">
+        <div class="row g-2">
+          <div class="col-6 col-md-3"><label class="form-label">Code</label><input id="cCode" class="form-control text-uppercase" maxlength="24" placeholder="WELCOME10"></div>
+          <div class="col-6 col-md-2"><label class="form-label">Amount (₹)</label><input id="cAmt" type="number" min="1" class="form-control"></div>
+          <div class="col-6 col-md-2"><label class="form-label">Max uses (0 = unlimited)</label><input id="cMax" type="number" min="0" value="100" class="form-control"></div>
+          <div class="col-6 col-md-3"><label class="form-label">Expires (optional)</label><input id="cExp" type="date" class="form-control"></div>
+          <div class="col-12 col-md-2 d-flex align-items-end"><button class="btn btn-acc w-100" id="cSave">Create</button></div>
+        </div>
+      </div>
+      <div class="card-x"><div class="table-responsive"><table class="table"><thead><tr><th>Code</th><th>Amount</th><th>Used</th><th>Expires</th><th>Active</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div></div>
+    </div>
+
+    <!-- Games & banners -->
+    <div class="pane" id="pane-content">
+      <div class="row g-3">
+        <div class="col-lg-6"><div class="card-x"><h6>Games</h6>
+          <div class="row g-2 mb-2">
+            <div class="col-12"><input id="gName" class="form-control" placeholder="Game name (e.g. Free Fire)"></div>
+            <div class="col-12 d-flex gap-2 align-items-center">
+              <div class="prev" id="gPrev" style="width:56px;height:56px;flex:none">No img</div>
+              <button class="btn btn-outline-light" id="gPick"><i class="bi bi-images"></i> Gallery se chuno</button>
+              <input id="gImg" class="form-control" placeholder="ya image URL (https://...)">
+            </div>
+            <div class="col-6"><input id="gOrder" type="number" class="form-control" placeholder="Order (1,2,3)"></div><div class="col-6"><button class="btn btn-acc w-100" id="gSave">Add game</button></div></div>
+          <div id="gList"></div></div></div>
+        <div class="col-lg-6"><div class="card-x"><h6>Home banners</h6>
+          <div class="row g-2 mb-2">
+            <div class="col-12 d-flex gap-2 align-items-center">
+              <div class="prev" id="pPrev" style="width:112px;height:56px;flex:none">No img</div>
+              <button class="btn btn-outline-light" id="pPick"><i class="bi bi-images"></i> Gallery se chuno</button>
+            </div>
+            <div class="col-12"><input id="pImg" class="form-control" placeholder="ya banner image URL (https://...)"></div>
+            <div class="col-8"><input id="pLink" class="form-control" placeholder="Click link (optional)"></div><div class="col-4"><button class="btn btn-acc w-100" id="pSave">Add</button></div></div>
+          <div id="pList"></div></div></div>
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="pane" id="pane-support">
+      <div class="card-x" id="tgCard"></div>
+      <div class="card-x"><select id="sFilter" class="form-select mb-3" style="max-width:200px"><option>open</option><option>resolved</option><option>closed</option><option value="">All</option></select><div id="sList"></div></div>
+    </div>
+
+    <!-- Settings -->
+    <div class="pane" id="pane-settings">
+      <div class="card-x">
+        <div class="row g-2" id="setForm"></div>
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          <button class="btn btn-acc" id="setSave"><i class="bi bi-save"></i> Save settings</button>
+          <button class="btn btn-outline-light" id="refTest"><i class="bi bi-link-45deg"></i> Test referral link</button>
+          <button class="btn btn-outline-light" id="backupBtn"><i class="bi bi-cloud-download"></i> Backup (JSON)</button>
+        </div>
+        <div id="refOut" class="small mt-2" style="color:var(--muted)"></div>
+      </div>
+    </div>
+
+    <!-- KYC -->
+    <div class="pane" id="pane-kyc"><div class="card-x"><select id="kFilter" class="form-select mb-3" style="max-width:200px"><option>pending</option><option>approved</option><option>rejected</option><option value="">All</option></select><div class="table-responsive"><table class="table"><thead><tr><th>Name</th><th>PAN</th><th>Photo</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody id="kBody"></tbody></table></div></div></div>
+    <!-- Proofs -->
+    <div class="pane" id="pane-proofs"><div class="card-x"><p class="small" style="color:var(--muted)">Players ke result screenshots. Result declare karne se pehle yaha check karo.</p><select id="prFilter" class="form-select mb-3" style="max-width:200px"><option>pending</option><option>verified</option><option>rejected</option><option value="">All</option></select><div class="table-responsive"><table class="table"><thead><tr><th>Match</th><th>Player</th><th>Screenshot</th><th>Note</th><th>Time</th><th>Status</th><th></th></tr></thead><tbody id="prBody"></tbody></table></div></div></div>
+    <!-- Fraud -->
+    <div class="pane" id="pane-fraud"><div class="card-x"><div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Anti-cheat / fraud alerts</h6><button class="btn btn-outline-warning btn-sm" id="fraudScan"><i class="bi bi-search"></i> Re-scan</button></div><p class="small" style="color:var(--muted)">Same device par multiple account, same UPI, duplicate UTR, zyada withdrawals, naye account se turant withdraw.</p><div class="table-responsive"><table class="table"><thead><tr><th>Level</th><th>Alert</th><th>Details</th><th></th></tr></thead><tbody id="fraudBody"></tbody></table></div></div></div>
+    <!-- Repeat / schedules -->
+    <div class="pane" id="pane-sched"><div class="card-x"><div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Repeating tournaments</h6><button class="btn btn-acc btn-sm" id="schedRun">Run now</button></div><p class="small" style="color:var(--muted)">Tournaments tab me kisi tournament par "Repeat" dabao. Agle 48 ghante ke match apne aap ban jaate hain (admin panel kholne par, ya Cloud Function se).</p><div class="table-responsive"><table class="table"><thead><tr><th>Tournament</th><th>Repeat</th><th>Next</th><th>Active</th><th></th></tr></thead><tbody id="schedBody"></tbody></table></div></div></div>
+    <!-- Rewards ops -->
+    <div class="pane" id="pane-ops"><div class="card-x"><h6>Referral bonus payout</h6><p class="small" style="color:var(--muted)">Naye signups ke referral pending rehte hain. Yaha se referrer ko bonus (Settings: Referral bonus + milestones) pay hota hai. Double pay nahi hota.</p><button class="btn btn-acc" id="opRef">Pay pending referrals</button></div><div class="card-x"><h6>Weekly cashback on losses</h6><p class="small" style="color:var(--muted)">Pichle 7 din me (entry fee − winnings) ka Settings wala % bonus cash me. Ek hafte me ek user ko ek hi baar.</p><button class="btn btn-acc" id="opCash">Run weekly cashback</button></div><div class="card-x"><h6>Referral stats</h6><div id="refStatsBox" class="small" style="color:var(--muted)">Loading...</div></div></div>
+    <!-- Admins -->
+    <div class="pane" id="pane-admins"><div class="card-x"><h6>Add sub-admin</h6><div class="row g-2"><div class="col-md-6"><input id="admEmail" class="form-control" placeholder="User email ya UID (pehle app me signup)"></div><div class="col-md-3"><select id="admRole" class="form-select"><option value="finance">finance — deposits, withdrawals, KYC, fraud</option><option value="support">support — tickets, users, KYC, proofs</option><option value="tournament">tournament — matches, banners, proofs</option><option value="super">super — sab kuch</option></select></div><div class="col-md-3"><button class="btn btn-acc w-100" id="admAdd">Add admin</button></div></div></div><div class="card-x"><div class="table-responsive"><table class="table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="adminBody"></tbody></table></div></div></div>
+
+    <!-- Logs -->
+    <div class="pane" id="pane-logs">
+      <div class="card-x"><h6>Last 100 admin actions</h6><input id="lgSearch" class="form-control mb-2" style="max-width:260px" placeholder="Search logs"><div class="table-responsive"><table class="table"><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody id="lgBody"></tbody></table></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tournament modal -->
+<div class="modal fade" id="tModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="tModalTitle">Tournament</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><div class="row g-2">
+    <div class="col-md-6"><label class="form-label">Name</label><input id="tName" class="form-control"></div>
+    <div class="col-md-6"><label class="form-label">Game</label><div class="d-flex gap-1"><select id="tGame" class="form-select"></select><button type="button" class="btn btn-outline-warning text-nowrap" id="gqToggle">+ Game</button></div>
+      <div id="gqBox" class="p-2 mt-2 rounded" style="display:none;background:var(--bg);border:1px dashed var(--line)">
+        <div class="small mb-1" style="color:var(--muted)">Pehle game add karo:</div>
+        <div class="d-flex flex-wrap gap-1 mb-2" id="gqChips"></div>
+        <input id="gqName" class="form-control mb-2" placeholder="Game name">
+        <div class="d-flex gap-2 align-items-center"><div class="prev" id="gqPrev" style="width:44px;height:44px;flex:none">Auto</div><button type="button" class="btn btn-sm btn-outline-light" id="gqPick"><i class="bi bi-images"></i> Gallery (optional)</button><button type="button" class="btn btn-sm btn-acc ms-auto" id="gqSave">Add game</button></div>
+      </div></div>
+    <div class="col-6 col-md-3"><label class="form-label">Mode</label><input id="tMode" list="modeList" class="form-control" placeholder="Solo / Duo / Squad..."></div>
+    <div class="col-6 col-md-3"><label class="form-label">Map</label><input id="tMap" list="mapList" class="form-control" placeholder="Map name"><datalist id="mapList"></datalist><datalist id="modeList"><option>Solo<option>Duo<option>Squad<option>Clash Squad<option>Lone Wolf<option>1v1<option>2v2<option>4v4<option>TDM<option>Custom Room</datalist></div>
+    <div class="col-6 col-md-3"><label class="form-label">Entry fee ₹</label><input id="tFee" type="number" min="0" class="form-control"></div>
+    <div class="col-6 col-md-3"><label class="form-label">Prize pool ₹</label><input id="tPool" type="number" min="0" class="form-control"></div>
+    <div class="col-6 col-md-3"><label class="form-label">Per kill ₹</label><input id="tKill" type="number" min="0" class="form-control"></div>
+    <div class="col-6 col-md-3"><label class="form-label">Max players (0 = unlimited)</label><input id="tMax" type="number" min="0" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">Start time</label><input id="tStart" type="datetime-local" class="form-control"></div>
+    <div class="col-md-2"><label class="form-label">Status</label><select id="tStatus" class="form-select"><option>upcoming</option><option>ongoing</option><option>completed</option><option>cancelled</option></select></div>
+    <div class="col-md-6"><label class="form-label">Tags (comma separated)</label><input id="tTags" class="form-control" placeholder="Hot, Pro"></div>
+    <div class="col-md-6"><label class="form-label">Prize distribution (one per line, rank:prize)</label><textarea id="tDist" class="form-control" rows="3" placeholder="1:100&#10;2:50&#10;3:25"></textarea></div>
+    <div class="col-md-6"><label class="form-label">Rules / description</label><textarea id="tDesc" class="form-control" rows="3"></textarea></div>
+    <div class="col-md-6"><label class="form-label">Live stream URL (optional)</label><input id="tLive" class="form-control" placeholder="https://youtube.com/..."></div>
+    <div class="col-md-3"><label class="form-label">Room ID</label><input id="tRoom" class="form-control"></div>
+    <div class="col-md-3"><label class="form-label">Room password</label><input id="tRoomPass" class="form-control"></div>
+    <div class="col-12"><label class="form-label">Tournament banner</label><div class="d-flex gap-2 align-items-center flex-wrap"><div class="prev" id="tbPrev" style="width:128px;height:64px;flex:none">No banner</div><button type="button" class="btn btn-outline-light" id="tbPick"><i class="bi bi-images"></i> Gallery se chuno</button><button type="button" class="btn btn-outline-danger btn-sm" id="tbDel">Remove</button><input id="tbUrl" class="form-control" style="flex:1;min-width:160px" placeholder="ya banner URL (https://...)"></div></div>
+    <div class="col-12"><div class="row g-2" id="tExtra"></div></div>
+    <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="tShowId"><label class="form-check-label" for="tShowId">Show Room ID &amp; Password to joined players</label></div></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-acc" id="tSave">Save</button></div>
+</div></div></div>
+
+<!-- Players / generic list modal -->
+<div class="modal fade" id="pModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="pModalTitle">Players</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body" id="pModalBody"></div>
+</div></div></div>
+
+<!-- Result modal -->
+<div class="modal fade" id="rModal" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="rModalTitle">Declare result</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><p class="small" style="color:var(--muted)">Kills aur rank daalo. Rank daalte hi prize distribution se rank prize auto-fill hoga (badal bhi sakte ho). Payout = kills × per-kill + rank prize. Winners ko Winning Cash me credit hoga. Agar beech me net band ho jaye to dobara "Result" kholo aur wahi data daalo — jinko paise mil chuke unhe dobara nahi milenge.</p><div class="mb-2 d-flex gap-2 align-items-center flex-wrap"><label class="btn btn-outline-light btn-sm mb-0"><i class="bi bi-upload"></i> Import CSV (gameId/ign, kills, rank)<input type="file" id="rCsv" accept=".csv,text/csv" hidden></label><button type="button" class="btn btn-outline-secondary btn-sm" id="rCsvTpl">Template</button></div><div id="rModalBody"></div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button class="btn btn-acc" id="rPay">Declare &amp; Pay</button></div>
+</div></div></div>
+
+<!-- Wallet adjust modal -->
+<div class="modal fade" id="aModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="aTitle">Adjust wallet</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="mb-2"><label class="form-label">Action</label><select id="aType" class="form-select"><option value="add_balance">Add money (deposit → Balance)</option><option value="add_winning">Add Winning Cash (also Balance)</option><option value="add_bonus">Add Bonus Cash (also Balance)</option><option value="deduct">Deduct from Balance</option></select></div>
+    <div class="mb-2"><label class="form-label">Amount ₹</label><input id="aAmt" type="number" min="1" class="form-control"></div>
+    <div class="mb-2"><label class="form-label">Note (shown in user's history)</label><input id="aNote" class="form-control" placeholder="e.g. UPI deposit ref 1234"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-acc" id="aSave">Apply</button></div>
+</div></div></div>
+
+<!-- Withdrawal process modal -->
+<div class="modal fade" id="wModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Process withdrawal</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div id="wInfo" class="mb-2 p-2 rounded" style="background:var(--bg);white-space:pre-wrap"></div>
+    <a id="wUpiPay" class="btn btn-outline-info btn-sm mb-3" style="display:none" href="#"><i class="bi bi-phone"></i> Open UPI app &amp; pay</a>
+    <label class="form-label">UTR / Transaction ID (Approve ke liye zaroori)</label><input id="wUtr" class="form-control mb-2" placeholder="12 digit UTR" maxlength="30">
+    <label class="form-label">Note / Reject reason</label><input id="wNote" class="form-control">
+  </div>
+  <div class="modal-footer justify-content-between"><button class="btn btn-danger" id="wReject"><i class="bi bi-x-circle"></i> Reject &amp; Refund</button><button class="btn btn-success" id="wApprove"><i class="bi bi-check-circle"></i> Approve (Paid)</button></div>
+</div></div></div>
+
+<!-- Ban modal -->
+<div class="modal fade" id="bModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="bTitle">Ban user</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><label class="form-label">Reason</label><input id="bReason" class="form-control" placeholder="e.g. Hacker / fake UTR"><label class="form-label mt-2">Duration</label><select id="bDays" class="form-select"><option value="0">Permanent</option><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="30">30 days</option></select></div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" id="bSave">Ban</button></div>
+</div></div></div>
+
+<!-- Support reply modal -->
+<div class="modal fade" id="sModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Reply to ticket</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><div id="sInfo" class="small mb-2" style="white-space:pre-wrap"></div><label class="form-label">Reply</label><select id="sCanned" class="form-select mb-1"><option value="">Ready reply chuno…</option><option>Aapka issue check kar rahe hain, 24 ghante me update milega.</option><option>Deposit approve ho gaya hai, kripya balance check karein.</option><option>Withdraw process ho gaya hai, UTR history me hai.</option><option>Kripya payment screenshot aur UTR / Transaction ID bhejein.</option><option>Rule violation ke karan action liya gaya hai.</option></select><textarea id="sReply" class="form-control" rows="3"></textarea>
+  <label class="form-label mt-2">Status</label><select id="sStatus" class="form-select"><option>open</option><option>resolved</option><option>closed</option></select></div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-acc" id="sSave">Save</button></div>
+</div></div></div>
+
+<div id="toastBox"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getDatabase, ref, get, set, update, push, remove, query, limitToLast, runTransaction, onValue } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+// !!! Paste the SAME Firebase config you use in Tournament_user.html !!!
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+const app = initializeApp(firebaseConfig), db = getDatabase(app), auth = getAuth(app);
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = id => Number($(id).value) || 0;
+const val = id => $(id).value.trim();
+const fmtDT = ts => ts ? new Date(Number(ts)).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-';
+const money = n => '₹' + (Number(n) || 0).toFixed(2);
+const toLocalInput = ts => { if (!ts) return ''; const d = new Date(ts); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+const modal = id => bootstrap.Modal.getOrCreateInstance($(id));
+const isUrl = v => /^https?:\/\//i.test(v);
+const isImg = v => isUrl(v) || /^data:image\/(png|jpeg|webp);base64,/i.test(v);
+function toast(msg, ok = true) {
+    const t = document.createElement('div'); t.className = 'toast-x ' + (ok ? 'ok' : 'err'); t.textContent = msg;
+    $('toastBox').appendChild(t); setTimeout(() => t.remove(), 3800);
+}
+// Firebase transaction aborts on empty local cache -> false "Already processed". Prime cache with a listener first.
+async function tx(path, fn) {
+    const r = ref(db, path); let off;
+    await new Promise((ok, no) => { off = onValue(r, () => ok(), no); });
+    try { return await runTransaction(r, fn); } finally { off(); }
+}
+async function whyNot(path) { const v = (await get(ref(db, path))).val(); return v ? `Already processed (status: ${v.status})` : 'Record nahi mila'; }
+const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { console.error(e); toast((e.code || '') + ' ' + e.message, false); } };
+async function addTxn(uid, type, amount, description, extra = {}) {
+    await push(ref(db, `transactions/${uid}`), { type, amount, description, timestamp: Date.now(), ...extra });
+}
+async function logAdmin(action, details) {
+    try { await push(ref(db, 'adminLogs'), { admin: me?.email || '', action, details: details || '', timestamp: Date.now() }); } catch (e) { console.warn('log failed', e); }
+}
+// Gallery picker: opens phone gallery, compresses image, returns data URL (no Firebase Storage needed)
+function pickImage(maxW, type = 'image/jpeg', q = 0.8) {
+    return new Promise((res, rej) => {
+        const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*';
+        i.onchange = () => {
+            const f = i.files[0]; if (!f) return rej(new Error('No file selected'));
+            const r = new FileReader();
+            r.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    const s = Math.min(1, maxW / img.width), c = document.createElement('canvas');
+                    c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+                    const x = c.getContext('2d');
+                    if (type === 'image/jpeg') { x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); }
+                    x.drawImage(img, 0, 0, c.width, c.height);
+                    const d = c.toDataURL(type, q);
+                    if (d.length > 900000) return rej(new Error('Image bahut badi hai, chhoti image chuno'));
+                    res(d);
+                };
+                img.onerror = () => rej(new Error('Invalid image'));
+                img.src = r.result;
+            };
+            r.readAsDataURL(f);
+        };
+        i.click();
+    });
+}
+const setPrev = (id, src) => { $(id).innerHTML = src ? `<img src="${esc(src)}">` : 'No img'; };
+let me = null, gamesCache = {}, usersCache = {};
+
+// ---------- auth ----------
+$('lBtn').onclick = guard(async () => {
+    $('lMsg').textContent = '';
+    await signInWithEmailAndPassword(auth, val('lEmail'), $('lPass').value).catch(e => { $('lMsg').textContent = 'Login failed: ' + e.code; throw e; });
+});
+$('lForgot').onclick = guard(async () => {
+    if (!val('lEmail')) { $('lMsg').textContent = 'Pehle email likho'; return; }
+    await sendPasswordResetEmail(auth, val('lEmail')); $('lMsg').className = 'small text-success mb-2'; $('lMsg').textContent = 'Reset link email par bhej diya.';
+});
+$('logoutBtn').onclick = () => signOut(auth);
+$('pwBtn').onclick = guard(async () => { await sendPasswordResetEmail(auth, me.email); toast('Password reset link email par bheja'); });
+onAuthStateChanged(auth, async user => {
+    if (!user) { me = null; $('appView').style.display = 'none'; $('loginView').style.display = 'block'; return; }
+    try {
+        const s = await get(ref(db, `users/${user.uid}/isAdmin`));
+        if (s.val() !== true) { $('lMsg').className = 'small text-danger mb-2'; $('lMsg').textContent = 'This account is not an admin.'; await signOut(auth); return; }
+        me = user; myRole = (await get(ref(db, `users/${user.uid}/role`))).val() || 'super'; $('loginView').style.display = 'none'; $('appView').style.display = 'block'; applyRoleTabs();
+        showTab('dashboard'); refreshBadges(); xBadges(); if (allowedTab('sched')) runTemplates().catch(() => { });
+    } catch (e) { $('lMsg').textContent = 'Error: ' + (e.code || e.message); await signOut(auth); }
+});
+
+// ---------- tabs ----------
+const loaders = { dashboard: loadDashboard, tournaments: loadTournaments, users: loadUsers, deposits: loadDeposits, withdrawals: loadWithdrawals, notify: loadNotifs, coupons: loadCoupons, content: loadContent, support: loadSupport, settings: loadSettings, logs: loadLogs, kyc: loadKyc, proofs: loadProofs, fraud: loadFraud, sched: loadSched, ops: loadOps, admins: loadAdmins };
+function showTab(name) {
+    if (!allowedTab(name)) { toast("Is role ko is tab ki permission nahi", false); return; }
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+    guard(loaders[name])();
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+async function refreshBadges() {
+    try {
+        const [w, d, s] = await Promise.all([get(ref(db, 'withdrawals')), get(ref(db, 'deposits')), get(ref(db, 'support'))]);
+        const set_ = (id, n) => { const el = $(id); el.textContent = n; el.style.display = n ? 'inline-block' : 'none'; };
+        set_('bd-withdrawals', Object.values(w.val() || {}).filter(x => x.status === 'pending').length);
+        set_('bd-deposits', Object.values(d.val() || {}).filter(x => x.status === 'pending').length);
+        set_('bd-support', Object.values(s.val() || {}).filter(x => x.status === 'open').length);
+    } catch (e) { /* ignore */ }
+}
+
+// ---------- dashboard ----------
+async function loadDashboard() {
+    const [u, t, w, sp, dp] = await Promise.all([get(ref(db, 'users')), get(ref(db, 'tournaments')), get(ref(db, 'withdrawals')), get(ref(db, 'support')), get(ref(db, 'deposits'))]);
+    const users = Object.values(u.val() || {}), tours = Object.values(t.val() || {}), wds = Object.values(w.val() || {});
+    const pendW = wds.filter(x => x.status === 'pending'), pendD = Object.values(dp.val() || {}).filter(x => x.status === 'pending');
+    const openS = Object.values(sp.val() || {}).filter(x => x.status === 'open');
+    const paidOut = wds.filter(x => x.status === 'approved').reduce((a, x) => a + (x.amount || 0), 0);
+    const depT = Object.values(dp.val() || {}).filter(x => x.status === 'approved').reduce((a, x) => a + (x.amount || 0), 0), payT = tours.reduce((a, t) => a + Object.values(t.paid || {}).reduce((b, v) => b + (Number(v) || 0), 0), 0);
+    const fees = tours.filter(x => x.status !== 'cancelled').reduce((s, x) => s + (Number(x.entryFee) || 0) * Object.keys(x.registeredPlayers || {}).length, 0);
+    const cards = [['Users', users.length], ['Banned users', users.filter(x => x.banned).length], ['Total balance', money(users.reduce((a, x) => a + (x.balance || 0), 0))], ['Total winning cash', money(users.reduce((a, x) => a + (x.winningCash || 0), 0))],
+        ['Upcoming', tours.filter(x => x.status === 'upcoming').length], ['Ongoing', tours.filter(x => x.status === 'ongoing').length], ['Completed', tours.filter(x => x.status === 'completed').length], ['Cancelled', tours.filter(x => x.status === 'cancelled').length],
+        ['Pending withdrawals', pendW.length], ['Pending amount', money(pendW.reduce((a, x) => a + (x.amount || 0), 0))], ['Total paid out', money(paidOut)], ['Pending deposits', pendD.length], ['Open tickets', openS.length], ['Total deposited', money(Object.values(dp.val() || {}).filter(x => x.status === 'approved').reduce((a, x) => a + (x.amount || 0), 0))], ['Deposited today', money(Object.values(dp.val() || {}).filter(x => x.status === 'approved' && Number(x.timestamp) >= new Date().setHours(0, 0, 0, 0)).reduce((a, x) => a + (x.amount || 0), 0))], ['Tournament payouts', money(payT)], ['Net cash (deposit − withdraw paid)', money(depT - paidOut)], ['Entry fees collected', money(fees)], ['Est. profit (fees − payouts)', money(fees - payT)]];
+    $('dashStats').innerHTML = cards.map(([l, v]) => `<div class="col-6 col-md-3"><div class="stat"><b>${v}</b><span>${l}</span></div></div>`).join('');
+    try { drawCharts(users, wds, dp.val() || {}); } catch (e) { console.warn(e); }
+}
+
+$('lbBtn').onclick = guard(async () => {
+    const u = (await get(query(ref(db, 'users'), limitToLast(500)))).val() || {};
+    const top = Object.values(u).filter(x => (x.totalEarnings || 0) > 0).sort((a, b) => (b.totalEarnings || 0) - (a.totalEarnings || 0)).slice(0, 20);
+    $('pModalTitle').textContent = '🏆 Top winners';
+    $('pModalBody').innerHTML = `<div class="table-responsive"><table class="table"><thead><tr><th>#</th><th>Player</th><th>Earnings</th><th>Wins</th><th>Matches</th></tr></thead><tbody>${top.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.ign || x.displayName)}</td><td>${money(x.totalEarnings)}</td><td>${x.wonMatches || 0}</td><td>${x.totalMatches || 0}</td></tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted)">Abhi koi winner nahi.</td></tr>'}</tbody></table></div>`;
+    modal('pModal').show();
+});
+// ---------- tournaments ----------
+let editTid = null;
+async function loadGamesCache() { gamesCache = (await get(ref(db, 'games'))).val() || {}; }
+async function loadTournaments() {
+    await loadGamesCache();
+    const all = (await get(ref(db, 'tournaments'))).val() || {};
+    const f = $('tFilter').value;
+    const rows = Object.entries(all)  .filter(([, t]) => (!f || t.status === f) && String(t.name || '').toLowerCase().includes($('tSearch').value.trim().toLowerCase())).sort((a, b) => (b[1].startTime || 0) - (a[1].startTime || 0));
+    $('tBody').innerHTML = rows.map(([id, t]) => {
+        const reg = Object.keys(t.registeredPlayers || {}).length;
+        const canCancel = !t.resultDeclared && t.status !== 'cancelled' && t.status !== 'completed';
+        return `<tr><td>${t.bannerUrl ? `<img src="${esc(t.bannerUrl)}" style="width:48px;height:28px;object-fit:cover;border-radius:4px;margin-right:6px">` : ''}${t.featured ? '⭐ ' : ''}${t.hidden ? '🙈 ' : ''}${esc(t.name)}</td><td>${esc(gamesCache[t.gameId]?.name || t.gameId)}</td><td>${esc(t.map || '-')}</td><td><span class="pill p-${esc(t.status)}">${esc(t.status)}</span></td><td>${fmtDT(t.startTime)}</td><td>${reg}/${t.maxPlayers || '∞'}</td>
+        <td class="text-nowrap"><button class="btn btn-sm btn-outline-light" data-a="edit" data-id="${id}">Edit</button> <button class="btn btn-sm btn-outline-secondary" data-a="dup" data-id="${id}">Copy</button> <button class="btn btn-sm btn-outline-secondary" data-a="reg" data-open="${t.regOpen !== false ? 1 : 0}" data-id="${id}">${t.regOpen !== false ? 'Close reg' : 'Open reg'}</button> <button class="btn btn-sm btn-outline-info" data-a="players" data-id="${id}">Players</button> <button class="btn btn-sm btn-outline-secondary" data-a="remind" data-id="${id}" title="Joined players ko reminder">⏰</button> <button class="btn btn-sm btn-outline-secondary" data-a="room" data-id="${id}" title="Room ID sab ko bhejo">🔑</button> <button class="btn btn-sm btn-outline-secondary" data-a="chat" data-id="${id}" data-n="${esc(t.name)}" title="Match chat">💬</button> <button class="btn btn-sm btn-outline-secondary" data-a="repeat" data-id="${id}" title="Daily/weekly repeat">🔁</button> ${t.resultDeclared ? '' : `<button class="btn btn-sm btn-outline-warning" data-a="result" data-id="${id}">Result</button>`} ${canCancel ? `<button class="btn btn-sm btn-outline-danger" data-a="cancel" data-id="${id}">Cancel+Refund</button>` : ''} <button class="btn btn-sm btn-outline-danger" data-a="del" data-id="${id}">Del</button></td></tr>`;
+    }).join('') || '<tr><td colspan="7" class="text-center" style="color:var(--muted)">No tournaments.</td></tr>';
+}
+$('tFilter').onchange = guard(loadTournaments); $('tSearch').oninput = guard(loadTournaments);
+$('tBody').onclick = guard(async e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const id = b.dataset.id, a = b.dataset.a;
+    if (a === 'edit') openTournamentForm(id);
+    if (a === 'reg') { await update(ref(db, `tournaments/${id}`), { regOpen: b.dataset.open !== '1' }); logAdmin('tournament_reg_toggle', id); loadTournaments(); }
+    if (a === 'dup') openTournamentForm(id, true);
+    if (a === 'players') showPlayers(id);
+    if (a === 'remind') {
+        const t = (await get(ref(db, `tournaments/${id}`))).val() || {}, ids = Object.keys(t.registeredPlayers || {});
+        if (!ids.length) { toast('Koi player nahi', false); return; }
+        if (!confirm(`${ids.length} player(s) ko reminder bhejein?`)) return;
+        await Promise.all(ids.map(uid => push(ref(db, `userNotifications/${uid}`), { title: '⏰ ' + t.name, message: `Match ${fmtDT(t.startTime)} par start hoga. Ready rahein!`, timestamp: Date.now() })));
+        logAdmin('tournament_remind', id); toast('Reminder bheja ✔');
+    }
+    if (a === 'room') sendRoom(id);
+    if (a === 'chat') adminChat(id, b.dataset.n || 'Match');
+    if (a === 'repeat') makeTemplate(id);
+    if (a === 'result') openResult(id);
+    if (a === 'cancel') cancelRefund(id);
+    if (a === 'del' && confirm('Delete this tournament? Joined players are NOT refunded (refund chahiye to pehle Cancel+Refund karo).')) { await remove(ref(db, `tournaments/${id}`)); logAdmin('tournament_delete', id); toast('Deleted'); loadTournaments(); }
+});
+$('newTBtn').onclick = guard(() => openTournamentForm(null));
+const MAPS = { 'free fire': 'Bermuda,Purgatory,Kalahari,Alpine,NeXTerra,Solara', 'bgmi': 'Erangel,Miramar,Sanhok,Vikendi,Livik,Karakin,Rondo', 'cod': 'Isolated,Nuketown,Crash,Firing Range,Standoff,Summit,Hijacked', 'pubg': 'Erangel,Miramar,Sanhok,Vikendi' };
+function fillMaps() {
+    const n = ($('tGame').selectedOptions[0]?.text || '').toLowerCase(); const k = Object.keys(MAPS).find(x => n.includes(x));
+    $('mapList').innerHTML = (k ? MAPS[k] : 'Bermuda,Purgatory,Kalahari,Erangel,Miramar,Sanhok').split(',').map(m => `<option>${m}</option>`).join('');
+}
+$('tGame').onchange = fillMaps;
+const XF = [['tType', 'Format', 'sel', 'Regular,Daily,Weekly,Special,Mega,Practice'], ['tView', 'View', 'sel', 'NA,TPP,FPP'], ['tDevice', 'Device', 'sel', 'Any,Mobile only,Emulator allowed'], ['tChat', 'Match chat (players ko dikhe?)', 'sel', 'off,announcements,open'], ['tRegClose', 'Reg. closes (min before start, 0 = at start)', 'number'], ['tMin', 'Min players to run', 'number'], ['tBonus', 'Max bonus cash usable %', 'number'], ['tMinM', 'Min matches played to join', 'number'], ['tRounds', 'Rounds / matches', 'number'], ['tGroup', 'Group link (Telegram / WhatsApp)', 'text'], ['tComm', 'Commission % (auto prize ke liye)', 'number'], ['tReveal', 'Room ID dikhao (min pehle, 0 = hamesha)', 'number']];
+const XC = [['oHead', 'Headshot only'], ['oAmmo', 'Limited ammo'], ['oSkill', 'Character skills allowed'], ['oGun', 'Gun attributes ON'], ['oFeat', 'Featured / pinned'], ['oHide', 'Hide (draft)'], ['oReg', 'Registration open'], ['oNotify', 'Notify all users on save'], ['oReq', 'Join par Game Name + Game ID zaroori']];
+$('tExtra').innerHTML = XF.map(([id, l, t, o]) => `<div class="col-6 col-md-4"><label class="form-label">${l}</label>${t === 'sel' ? `<select id="${id}" class="form-select">${o.split(',').map(x => `<option>${x}</option>`).join('')}</select>` : `<input id="${id}" type="${t}" min="0" class="form-control">`}</div>`).join('') + XC.map(([id, l]) => `<div class="col-6 col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" id="${id}"><label class="form-check-label" for="${id}">${l}</label></div></div>`).join('');
+$('tExtra').insertAdjacentHTML('beforeend', '<div class="col-12"><button type="button" class="btn btn-sm btn-outline-warning" id="tCalc">🧮 Auto prize pool = fee × max players − commission %</button></div>');
+$('tCalc').onclick = () => { const p = num('tFee') * num('tMax') * (1 - num('tComm') / 100); if (!(p > 0)) { toast('Entry fee aur Max players daalo', false); return; } $('tPool').value = Math.floor(p); };
+let tbData = '';
+$('tbPick').onclick = guard(async () => { tbData = await pickImage(900, 'image/jpeg', 0.7); setPrev('tbPrev', tbData); $('tbUrl').value = ''; });
+$('tbDel').onclick = () => { tbData = ''; $('tbUrl').value = ''; setPrev('tbPrev', ''); };
+$('tbUrl').oninput = () => { tbData = ''; setPrev('tbPrev', isUrl(val('tbUrl')) ? val('tbUrl') : ''); };
+// quick add game from tournament form
+let gqData = '';
+$('gqChips').innerHTML = ['Free Fire', 'Free Fire MAX', 'BGMI', 'COD Mobile', 'PUBG', 'Minecraft'].map(n => `<button type="button" class="btn btn-sm btn-outline-secondary" data-n="${n}">${n}</button>`).join('');
+$('gqChips').onclick = e => { const n = e.target.dataset.n; if (n) $('gqName').value = n; };
+$('gqToggle').onclick = () => { $('gqBox').style.display = $('gqBox').style.display === 'none' ? 'block' : 'none'; };
+$('gqPick').onclick = guard(async () => { gqData = await pickImage(400, 'image/jpeg', 0.8); setPrev('gqPrev', gqData); });
+function initialsImg(name) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+    x.fillStyle = `hsl(${[...name].reduce((a, ch) => a + ch.charCodeAt(0), 0) * 37 % 360},55%,40%)`; x.fillRect(0, 0, 128, 128);
+    x.fillStyle = '#fff'; x.font = 'bold 54px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase(), 64, 68); return c.toDataURL('image/png');
+}
+$('gqSave').onclick = guard(async () => {
+    const n = val('gqName'); if (!n) { toast('Game name likho', false); return; }
+    const r = await push(ref(db, 'games'), { name: n, imageUrl: gqData || initialsImg(n), order: Object.keys(gamesCache).length + 1 });
+    logAdmin('game_add', n); await loadGamesCache();
+    $('tGame').innerHTML = Object.entries(gamesCache).map(([gid, g]) => `<option value="${esc(gid)}">${esc(g.name)}</option>`).join('');
+    $('tGame').value = r.key; fillMaps(); gqData = ''; $('gqName').value = ''; setPrev('gqPrev', ''); $('gqBox').style.display = 'none'; toast('Game added ✔');
+});
+async function openTournamentForm(id, dup = false) {
+    await loadGamesCache();
+    editTid = dup ? null : id;
+    $('tGame').innerHTML = Object.entries(gamesCache).map(([gid, g]) => `<option value="${esc(gid)}">${esc(g.name)}</option>`).join('') || '<option value="">(add a game first)</option>';
+    $('gqBox').style.display = Object.keys(gamesCache).length ? 'none' : 'block';
+    const t = id ? ((await get(ref(db, `tournaments/${id}`))).val() || {}) : {};
+    $('tModalTitle').textContent = dup ? 'New tournament (copy)' : (id ? 'Edit tournament' : 'New tournament');
+    $('tName').value = (t.name || '') + (dup ? ' (copy)' : ''); if (t.gameId) $('tGame').value = t.gameId;
+    $('tMode').value = t.mode || 'Solo';
+    $('tMap').value = t.map || ''; fillMaps();
+    $('tFee').value = t.entryFee ?? 0; $('tPool').value = t.prizePool ?? 0; $('tKill').value = t.perKillPrize ?? 0; $('tMax').value = t.maxPlayers ?? 0;
+    $('tStart').value = toLocalInput(dup || !t.startTime ? Date.now() + 3600000 : t.startTime); $('tStatus').value = dup ? 'upcoming' : (t.status || 'upcoming');
+    $('tTags').value = Array.isArray(t.tags) ? t.tags.join(', ') : Object.values(t.tags || {}).join(', ');
+    $('tDist').value = t.prizeDistribution && typeof t.prizeDistribution === 'object' ? Object.entries(t.prizeDistribution).map(([r, p]) => `${r}:${p}`).join('\n') : (t.prizeDistribution || '');
+    $('tDesc').value = t.description || ''; $('tLive').value = t.liveUrl || '';
+    $('tRoom').value = dup ? '' : (t.roomId || ''); $('tRoomPass').value = dup ? '' : (t.roomPassword || ''); $('tShowId').checked = dup ? false : !!t.showIdPass;
+    const o = t.options || {}, set = (id, v) => { $(id).value = v; };
+    set('tType', t.format || 'Regular'); set('tView', t.view || 'NA'); set('tDevice', t.device || 'Any'); set('tChat', t.chatMode || 'off'); set('tRegClose', t.regCloseMins ?? 0); set('tMin', t.minPlayers ?? 0); set('tBonus', t.bonusUsePct ?? 100); set('tMinM', t.minMatches ?? 0); set('tRounds', t.rounds ?? 1); set('tGroup', t.groupLink || ''); set('tComm', t.commissionPct ?? 0); set('tReveal', t.roomRevealMins ?? 0);
+    $('oHead').checked = !!o.headshotOnly; $('oAmmo').checked = !!o.limitedAmmo; $('oSkill').checked = o.characterSkill !== false; $('oGun').checked = !!o.gunAttributes; $('oFeat').checked = !!t.featured; $('oHide').checked = !!t.hidden; $('oReg').checked = t.regOpen !== false; $('oNotify').checked = false; $('oReq').checked = t.requireGameId !== false;
+    const b = t.bannerUrl || ''; tbData = b.startsWith('data:') ? b : ''; $('tbUrl').value = tbData ? '' : b; setPrev('tbPrev', b);
+    modal('tModal').show();
+}
+$('tSave').onclick = guard(async () => {
+    if (!val('tName')) { toast('Enter tournament name', false); return; }
+    if (!$('tGame').value) { toast('Select a game (add one in Games & Banners)', false); return; }
+    const dist = {}; val('tDist').split('\n').forEach(l => { const [r, p] = l.split(':'); if (r && p && !isNaN(Number(p))) dist[r.trim()] = Number(p); });
+    const live = val('tLive');
+    if (live && !isUrl(live)) { toast('Live URL must start with https://', false); return; }
+    const mapName = val('tMap');
+    const banner = tbData || val('tbUrl'); if (banner && !isImg(banner)) { toast('Banner invalid (gallery ya https URL)', false); return; }
+    const gl = val('tGroup'); if (gl && !isUrl(gl)) { toast('Group link https:// se shuru ho', false); return; }
+    if (!mapName) { toast('Map name likho', false); return; }
+    const startMs = new Date($('tStart').value).getTime() || Date.now();
+    if (!editTid && startMs < Date.now() - 60000 && !confirm('Start time past me hai. Fir bhi save karein?')) return;
+    const distTotal = Object.values(dist).reduce((a, b) => a + b, 0);
+    if (distTotal > num('tPool') && num('tPool') > 0 && !confirm(`Prize distribution total (${money(distTotal)}) prize pool (${money(num('tPool'))}) se zyada hai. Fir bhi save karein?`)) return;
+    const data = {
+        name: val('tName'), gameId: $('tGame').value, mode: $('tMode').value, map: mapName, entryFee: num('tFee'), prizePool: num('tPool'), perKillPrize: num('tKill'), maxPlayers: num('tMax'),
+        startTime: startMs, status: $('tStatus').value, tags: val('tTags').split(',').map(x => x.trim()).filter(Boolean),
+        prizeDistribution: Object.keys(dist).length ? dist : null, description: $('tDesc').value, liveUrl: live || null, roomId: val('tRoom'), roomPassword: val('tRoomPass'), showIdPass: $('tShowId').checked,
+        bannerUrl: banner || null, format: $('tType').value, view: $('tView').value, device: $('tDevice').value, chatMode: $('tChat').value, regCloseMins: num('tRegClose'), minPlayers: num('tMin'), bonusUsePct: Math.min(100, num('tBonus')), minMatches: num('tMinM'), rounds: num('tRounds') || 1, groupLink: gl || null, commissionPct: num('tComm'), roomRevealMins: num('tReveal'), requireGameId: $('oReq').checked,
+        options: { headshotOnly: $('oHead').checked, limitedAmmo: $('oAmmo').checked, characterSkill: $('oSkill').checked, gunAttributes: $('oGun').checked }, featured: $('oFeat').checked, hidden: $('oHide').checked, regOpen: $('oReg').checked
+    };
+    if (data.entryFee < 0 || data.prizePool < 0 || data.perKillPrize < 0) { toast('Negative amount allowed nahi', false); return; }
+    if (editTid) { await update(ref(db, `tournaments/${editTid}`), data); logAdmin('tournament_edit', `${editTid} ${data.name}`); }
+    else { const r = await push(ref(db, 'tournaments'), { ...data, createdAt: Date.now() }); logAdmin('tournament_create', `${r.key} ${data.name}`); }
+    if ($('oNotify').checked) await push(ref(db, 'notifications'), { title: '🏆 ' + data.name, message: `${data.mode} • ${data.map} • Entry ${money(data.entryFee)} • Prize ${money(data.prizePool)} • ${fmtDT(data.startTime)}`, timestamp: Date.now() });
+    modal('tModal').hide(); toast('Saved ✔'); loadTournaments();
+});
+
+async function fetchPlayers(tid) {
+    const t = (await get(ref(db, `tournaments/${tid}`))).val() || {};
+    const reg = t.registeredPlayers || {};
+    const list = await Promise.all(Object.entries(reg).map(async ([uid, r]) => {
+        const u = (await get(ref(db, `users/${uid}`))).val() || {};
+        return { uid, ign: r.ign || u.ign || '', team: r.team || [], name: u.displayName || '', email: u.email || '', gameId: String(r.gameId || u.gameId || ''), joinedAt: r.joinedAt || r.timestamp || 0 };
+    }));
+    return { t, list };
+}
+let lastPl = { name: '', list: [] };
+$('pModalBody').onclick = guard(async e => {
+    const sv = e.target.closest('[data-saveid]'); if (sv) { await update(ref(db, `users/${sv.dataset.saveid}`), { ign: val('dIgn'), gameId: val('dGid') }); logAdmin('user_edit_id', sv.dataset.saveid); toast('Saved ✔'); return; }
+    const cc = e.target.closest('[data-copy]'); if (cc) { await navigator.clipboard.writeText(cc.dataset.copy); toast('Copied'); return; }
+    if (e.target.closest('[data-copyall]')) { await navigator.clipboard.writeText(`${lastPl.name} (${lastPl.game})\n` + lastPl.list.map((p, i) => `${i + 1}. ${p.ign || p.name} - ${p.gameId || 'no ID'}`).join('\n')); toast('Sab copy ho gaya'); return; }
+    if (e.target.closest('[data-plcsv]')) {
+        const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+        const csv = ['Slot,Game,IGN,GameID,Team,Email'].concat(lastPl.list.map((p, i) => [i + 1, lastPl.game, p.ign || p.name, p.gameId, (p.team || []).join(' | '), p.email].map(q).join(','))).join('\n');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'players.csv'; a.click(); return;
+    }
+    const b = e.target.closest('[data-kick]'); if (!b) return;
+    const tid = b.dataset.tid, uid = b.dataset.kick, t = (await get(ref(db, `tournaments/${tid}`))).val() || {}, fee = Number(t.entryFee) || 0;
+    if (t.resultDeclared) { toast('Result declare ho chuka hai', false); return; }
+    if (!(t.registeredPlayers || {})[uid]) { toast('Player already removed', false); return; }
+    if (!confirm(`Player ko remove karein${fee ? ' aur ' + money(fee) + ' refund' : ''}?`)) return;
+    await remove(ref(db, `tournaments/${tid}/registeredPlayers/${uid}`));
+    remove(ref(db, `users/${uid}/joinedTournaments/${tid}`)).catch(() => { });
+    if (fee > 0) { await tx(`users/${uid}`, u => { if (!u) return u; u.balance = (u.balance || 0) + fee; return u; }); await addTxn(uid, 'refund', fee, `Refund: removed from ${t.name}`, { tournamentId: tid }); }
+    logAdmin('player_kick', `${tid} ${uid}`); toast('Removed ✔'); showPlayers(tid); loadTournaments();
+});
+async function showPlayers(tid) {
+    await loadGamesCache();
+    const { t, list } = await fetchPlayers(tid), gname = gamesCache[t.gameId]?.name || '-';
+    list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+    lastPl = { name: t.name, game: gname, list };
+    $('pModalTitle').textContent = `${t.name} (${gname}) — ${list.length} players`;
+    const cp = v => v ? ` <button class="btn btn-sm btn-link p-0" data-copy="${esc(v)}"><i class="bi bi-clipboard"></i></button>` : '';
+    $('pModalBody').innerHTML = `<div class="table-responsive"><table class="table"><thead><tr><th>Slot</th><th>Game Name (IGN)</th><th>Game ID</th><th>Game</th><th>Team</th><th>Joined</th><th>Email</th><th></th></tr></thead><tbody>${list.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.ign || p.name)}${cp(p.ign || p.name)}</td><td>${p.gameId ? `<code>${esc(p.gameId)}</code>` : '<span class="pill p-rejected">MISSING</span>'}${cp(p.gameId)}</td><td>${esc(gname)}</td><td>${esc((p.team || []).join(', '))}</td><td>${fmtDT(p.joinedAt)}</td><td>${esc(p.email)}</td><td><button class="btn btn-sm btn-outline-danger" data-kick="${p.uid}" data-tid="${tid}">Kick</button></td></tr>`).join('') || '<tr><td colspan="8" style="color:var(--muted)">Koi player nahi.</td></tr>'}</tbody></table></div><button class="btn btn-outline-light btn-sm" data-plcsv="1"><i class="bi bi-download"></i> CSV</button> <button class="btn btn-outline-light btn-sm" data-copyall="1"><i class="bi bi-clipboard"></i> Copy all (Name - ID)</button>`;
+    modal('pModal').show();
+}
+
+// ---- cancel + auto refund ----
+async function cancelRefund(tid, silent) {
+    const t0 = (await get(ref(db, `tournaments/${tid}`))).val() || {};
+    const n = Object.keys(t0.registeredPlayers || {}).length, fee = Number(t0.entryFee) || 0;
+    if (!silent && !confirm(`"${t0.name}" cancel hoga aur ${n} player(s) ko ${money(fee)} wapas milega. Continue?`)) return;
+    const lock = await tx(`tournaments/${tid}`, t => { if (!t || t.resultDeclared || t.refunded || t.status === 'cancelled') return; t.status = 'cancelled'; t.refunded = true; return t; });
+    if (!lock.committed) { toast('Already cancelled / completed', false); return; }
+    for (const uid of Object.keys(t0.registeredPlayers || {})) {
+        if (fee > 0) {
+            await tx(`users/${uid}`, u => { if (!u) return u; u.balance = (u.balance || 0) + fee; return u; });
+            await addTxn(uid, 'refund', fee, `Refund: ${t0.name} cancelled`, { tournamentId: tid });
+        }
+    }
+    logAdmin('tournament_cancel_refund', `${tid} ${t0.name} refund ${fee} x ${n}`);
+    toast('Cancelled & refunded ✔'); loadTournaments();
+}
+
+$('autoStartBtn').onclick = guard(async () => {
+    const all = (await get(ref(db, 'tournaments'))).val() || {};
+    const l = Object.entries(all).filter(([, t]) => t.status === 'upcoming' && !t.resultDeclared && t.startTime && t.startTime <= Date.now() && !(t.minPlayers > 0 && Object.keys(t.registeredPlayers || {}).length < t.minPlayers));
+    if (!l.length) { toast('Koi due match nahi'); return; }
+    if (!confirm(`${l.length} match ongoing kiye jayenge:\n` + l.map(([, t]) => t.name).join('\n'))) return;
+    for (const [id] of l) await update(ref(db, `tournaments/${id}`), { status: 'ongoing' });
+    logAdmin('tournaments_autostart', `${l.length} started`); toast(`${l.length} match ongoing ✔`); loadTournaments();
+});
+$('autoCxBtn').onclick = guard(async () => {
+    const all = (await get(ref(db, 'tournaments'))).val() || {};
+    const l = Object.entries(all).filter(([, t]) => t.status === 'upcoming' && !t.resultDeclared && t.minPlayers > 0 && t.startTime <= Date.now() && Object.keys(t.registeredPlayers || {}).length < t.minPlayers);
+    if (!l.length) { toast('Koi under-filled tournament nahi'); return; }
+    if (!confirm(`${l.length} tournament cancel + refund honge:\n` + l.map(([, t]) => t.name).join('\n'))) return;
+    for (const [id] of l) await cancelRefund(id, true);
+});
+// ---- result declaration + payout (resumable) ----
+let resultTid = null, resultPlayers = [];
+async function openResult(tid) {
+    const { t, list } = await fetchPlayers(tid);
+    if (t.resultDeclared) { toast('Result already declared', false); return; }
+    resultTid = tid; resultPlayers = list;
+    $('rModalTitle').textContent = `Declare result — ${t.name} (per kill ${money(t.perKillPrize)})`;
+    $('rModalBody').innerHTML = `<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Player</th><th style="width:90px">Kills</th><th style="width:90px">Rank</th><th style="width:120px">Rank prize ₹</th><th>Total</th></tr></thead><tbody>${list.map((p, i) => `<tr data-i="${i}"><td>${esc(p.ign || p.name || p.email)}${p.gameId ? `<br><small style="color:var(--muted)">ID: ${esc(p.gameId)}</small>` : ''}${(t.paid || {})[p.uid] ? ' <span class="pill p-approved">paid</span>' : ''}</td><td><input type="number" min="0" value="0" class="form-control form-control-sm r-kills"></td><td><input type="number" min="0" value="0" class="form-control form-control-sm r-rank"></td><td><input type="number" min="0" value="0" class="form-control form-control-sm r-prize"></td><td class="r-total">₹0</td></tr>`).join('')}</tbody></table></div>`;
+    $('rModalBody').dataset.perKill = t.perKillPrize || 0;
+    $('rModalBody').dataset.dist = JSON.stringify(t.prizeDistribution || {});
+    modal('rModal').show();
+}
+$('rModalBody').addEventListener('input', e => {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    if (e.target.classList.contains('r-rank')) {
+        const dist = JSON.parse($('rModalBody').dataset.dist || '{}');
+        const rk = String(Number(e.target.value) || 0);
+        tr.querySelector('.r-prize').value = dist[rk] ?? 0;
+    }
+    const per = Number($('rModalBody').dataset.perKill) || 0;
+    tr.querySelector('.r-total').textContent = money((Number(tr.querySelector('.r-kills').value) || 0) * per + (Number(tr.querySelector('.r-prize').value) || 0));
+});
+$('rPay').onclick = guard(async () => {
+    if (!resultTid) return;
+    const rows = [...$('rModalBody').querySelectorAll('tr[data-i]')].map(tr => {
+        const p = resultPlayers[Number(tr.dataset.i)], per = Number($('rModalBody').dataset.perKill) || 0;
+        const kills = Number(tr.querySelector('.r-kills').value) || 0, rank = Number(tr.querySelector('.r-rank').value) || 0, rp = Number(tr.querySelector('.r-prize').value) || 0;
+        return { ...p, kills, rank, total: kills * per + rp };
+    });
+    const sum = rows.reduce((a, r) => a + r.total, 0);
+    if (!confirm(`Pay ${money(sum)} to ${rows.filter(r => r.total > 0).length} player(s) and mark completed? This cannot be undone.`)) return;
+    // lock (expires after 5 min so a crashed run can be resumed)
+    const lock = await tx(`tournaments/${resultTid}`, t => {
+        if (!t || t.resultDeclared) return;
+        if (t.resultLock && Date.now() - t.resultLock < 300000) return;
+        t.resultLock = Date.now(); return t;
+    });
+    if (!lock.committed) { toast('Already declared / in progress (5 min baad try karo)', false); return; }
+    const tid = resultTid, tname = lock.snapshot.val().name || 'Tournament', already = lock.snapshot.val().paid || {};
+    const winners = {};
+    for (const r of rows) {
+        if (!already[r.uid]) {
+            await tx(`users/${r.uid}`, u => {
+                if (!u) return u;
+                u.totalMatches = (u.totalMatches || 0) + 1; u.totalKills = (u.totalKills || 0) + (r.kills || 0);
+                if (r.rank === 1) u.wonMatches = (u.wonMatches || 0) + 1;
+                if (r.total > 0) { u.winningCash = (u.winningCash || 0) + r.total; u.balance = (u.balance || 0) + r.total; u.totalEarnings = (u.totalEarnings || 0) + r.total; }
+                return u;
+            });
+            await set(ref(db, `tournaments/${tid}/paid/${r.uid}`), r.total);
+            await set(ref(db, `tournaments/${tid}/results/${r.uid}`), { kills: r.kills, rank: r.rank, total: r.total });
+            for (const sk of [wkKey(), moKey()]) await tx(`seasons/${sk}/${r.uid}`, x => { x = x || { name: r.ign || r.name || 'Player', earnings: 0, wins: 0, matches: 0 }; x.name = r.ign || r.name || x.name; x.earnings = (x.earnings || 0) + r.total; x.matches = (x.matches || 0) + 1; if (r.rank === 1) x.wins = (x.wins || 0) + 1; return x; });
+            const uv = (await get(ref(db, `users/${r.uid}`))).val() || {};
+            await update(ref(db, `leaderboard/${r.uid}`), { ign: uv.ign || null, displayName: uv.displayName || r.name || 'Player', totalEarnings: uv.totalEarnings || 0, wonMatches: uv.wonMatches || 0, totalMatches: uv.totalMatches || 0, referralCount: uv.referralCount || 0 });
+            if (r.total > 0) await push(ref(db, `userNotifications/${r.uid}`), { title: '🏆 You won ' + money(r.total), message: `${tname}: ${r.kills} kills${r.rank ? ', rank #' + r.rank : ''}. Winning cash me add ho gaya.`, timestamp: Date.now() });
+            if (r.total > 0) await addTxn(r.uid, 'tournament_win', r.total, `Won: ${tname}` + (r.kills ? ` (${r.kills} kills)` : ''), { tournamentId: tid });
+        }
+        if (r.rank > 0 && r.rank <= 10 && r.total > 0) winners[r.rank] = { name: r.ign || r.name || 'Player', prize: r.total };
+    }
+    await update(ref(db, `tournaments/${tid}`), { status: 'completed', winners, resultAt: Date.now(), resultDeclared: true, resultLock: null });
+    logAdmin('result_declared', `${tid} ${tname} total ${sum}`);
+    modal('rModal').hide(); toast('Result declared & winners paid ✔'); loadTournaments();
+});
+
+// ---------- users ----------
+async function loadUsers() {
+    usersCache = (await get(query(ref(db, 'users'), limitToLast(500)))).val() || {};
+    for (const [uid, u] of Object.entries(usersCache)) if (u.banned && u.bannedUntil && u.bannedUntil < Date.now()) { await update(ref(db, `users/${uid}`), { banned: false, bannedReason: null, bannedAt: null, bannedUntil: null }); u.banned = false; }
+    renderUsers();
+}
+function renderUsers() {
+    const q = val('uSearch').toLowerCase(), f = $('uFilter').value;
+    const rows = Object.entries(usersCache).filter(([, u]) => (!q || [u.email, u.displayName, u.ign].some(x => String(x || '').toLowerCase().includes(q))) && (f !== 'banned' || u.banned)).slice(0, 200);
+    $('uBody').innerHTML = rows.map(([uid, u]) => `<tr><td>${esc(u.ign || u.displayName)}${u.isAdmin ? ' <span class="pill p-ongoing">admin</span>' : ''}${u.banned ? ' <span class="pill p-banned">banned</span>' : ''}${u.warnings ? ` <span class="pill p-pending">⚠ ${u.warnings}</span>` : ''}${u.banned && u.bannedReason ? `<br><small style="color:var(--muted)">${esc(u.bannedReason)}${u.bannedUntil ? ' • till ' + fmtDT(u.bannedUntil) : ' • permanent'}</small>` : ''}</td><td>${esc(u.email)}</td><td>${money(u.balance)}</td><td>${money(u.winningCash)}</td><td>${money(u.bonusCash)}</td><td>${u.totalMatches || 0}</td>
+    <td class="text-nowrap"><button class="btn btn-sm btn-outline-warning" data-a="wallet" data-uid="${uid}">Wallet</button> <button class="btn btn-sm btn-outline-info" data-a="detail" data-uid="${uid}">Detail</button> <button class="btn btn-sm btn-outline-secondary" data-a="warn" data-uid="${uid}">Warn</button> <button class="btn btn-sm btn-outline-info" data-a="hist" data-uid="${uid}">History</button> ${u.isAdmin ? '' : (u.banned ? `<button class="btn btn-sm btn-success" data-a="unban" data-uid="${uid}">Unban</button>` : `<button class="btn btn-sm btn-danger" data-a="ban" data-uid="${uid}">Ban</button>`)}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center" style="color:var(--muted)">No users.</td></tr>';
+}
+$('uSearch').oninput = renderUsers; $('uFilter').onchange = renderUsers;
+$('uCsv').onclick = () => {
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const rows = Object.entries(usersCache).map(([uid, u]) => [uid, u.displayName, u.ign, u.gameId, u.email, u.balance, u.winningCash, u.bonusCash, u.totalMatches, u.totalEarnings, u.banned ? 'banned' : ''].map(q).join(','));
+    const csv = ['UID,Name,IGN,GameID,Email,Balance,Winning,Bonus,Matches,Earnings,Status'].concat(rows).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'users.csv'; a.click();
+};
+let adjUid = null, banUid = null;
+$('qBanBtn').onclick = guard(async () => {
+    const q = val('qBan').toLowerCase(), e = Object.entries(usersCache).find(([id, u]) => id.toLowerCase() === q || String(u.email || '').toLowerCase() === q);
+    if (!e) { toast('User nahi mila (pehle Users tab kholo)', false); return; }
+    if (e[1].isAdmin) { toast('Admin ko ban nahi kar sakte', false); return; }
+    banUid = e[0]; $('bTitle').textContent = 'Ban — ' + (e[1].email || e[0]); $('bReason').value = ''; $('bDays').value = '0'; modal('bModal').show();
+});
+$('uBody').onclick = guard(async e => {
+    const b = e.target.closest('button[data-uid]'); if (!b) return;
+    const uid = b.dataset.uid, a = b.dataset.a;
+    if (a === 'wallet') { adjUid = uid; $('aTitle').textContent = 'Wallet — ' + (usersCache[uid]?.email || uid); $('aAmt').value = ''; $('aNote').value = ''; modal('aModal').show(); }
+    if (a === 'ban') { banUid = uid; $('bTitle').textContent = 'Ban — ' + (usersCache[uid]?.email || uid); $('bReason').value = ''; $('bDays').value = '0'; modal('bModal').show(); }
+    if (a === 'unban') {
+        if (!confirm('Unban this user?')) return;
+        await update(ref(db, `users/${uid}`), { banned: false, bannedReason: null, bannedAt: null, bannedUntil: null });
+        logAdmin('user_unban', usersCache[uid]?.email || uid); toast('Unbanned ✔'); loadUsers();
+    }
+    if (a === 'warn') {
+        const r = prompt('Warning reason:', 'Rule violation'); if (!r) return; let n = 0;
+        await tx(`users/${uid}`, u => { if (!u) return u; u.warnings = (u.warnings || 0) + 1; n = u.warnings; return u; });
+        await push(ref(db, `userNotifications/${uid}`), { title: '⚠ Warning', message: r, timestamp: Date.now() });
+        logAdmin('user_warn', `${usersCache[uid]?.email || uid} #${n}: ${r}`); toast(`Warning #${n} bheji`);
+        if (n >= 3 && confirm('3 warnings ho gayi. Ban karein?')) { banUid = uid; $('bTitle').textContent = 'Ban — ' + (usersCache[uid]?.email || uid); $('bReason').value = '3 warnings'; $('bDays').value = '0'; modal('bModal').show(); }
+        loadUsers();
+    }
+    if (a === 'detail') {
+        const [ts, ds, ws] = await Promise.all([get(ref(db, 'tournaments')), get(ref(db, 'deposits')), get(ref(db, 'withdrawals'))]);
+        const u = usersCache[uid] || {}, T = Object.values(ts.val() || {}), sum = (o, st) => Object.values(o.val() || {}).filter(x => x.userId === uid && x.status === st).reduce((a, x) => a + (x.amount || 0), 0);
+        $('pModalTitle').textContent = 'User — ' + (u.email || uid);
+        $('pModalBody').innerHTML = `<div class="row g-2 mb-3"><div class="col-6"><label class="form-label">IGN</label><input id="dIgn" class="form-control" value="${esc(u.ign)}"></div><div class="col-6"><label class="form-label">Game ID</label><input id="dGid" class="form-control" value="${esc(u.gameId)}"></div><div class="col-12"><button class="btn btn-acc btn-sm" data-saveid="${uid}">Save IGN / Game ID</button></div></div><ul class="small"><li>Joined matches: <b>${T.filter(t => (t.registeredPlayers || {})[uid]).length}</b></li><li>Total deposited: <b>${money(sum(ds, 'approved'))}</b></li><li>Withdrawn (paid): <b>${money(sum(ws, 'approved'))}</b></li><li>Total won: <b>${money(T.reduce((a, t) => a + ((t.paid || {})[uid] || 0), 0))}</b></li><li>Balance ${money(u.balance)} · Winning ${money(u.winningCash)} · Bonus ${money(u.bonusCash)}</li><li>Warnings: ${u.warnings || 0}</li></ul>`;
+        modal('pModal').show();
+    }
+    if (a === 'hist') {
+        const tx = (await get(query(ref(db, `transactions/${uid}`), limitToLast(60)))).val() || {};
+        const rows = Object.values(tx).sort((x, y) => (y.timestamp || 0) - (x.timestamp || 0));
+        $('pModalTitle').textContent = 'History — ' + (usersCache[uid]?.email || uid);
+        $('pModalBody').innerHTML = `<div class="table-responsive"><table class="table"><thead><tr><th>Time</th><th>Type</th><th>Amount</th><th>Description</th></tr></thead><tbody>${rows.map(x => `<tr><td>${fmtDT(x.timestamp)}</td><td>${esc(x.type)}</td><td style="color:${x.amount < 0 ? '#EF4444' : '#10B981'}">${money(x.amount)}</td><td>${esc(x.description)}</td></tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted)">No transactions.</td></tr>'}</tbody></table></div>`;
+        modal('pModal').show();
+    }
+});
+$('bSave').onclick = guard(async () => {
+    const reason = val('bReason') || 'Violation of rules';
+    await update(ref(db, `users/${banUid}`), { banned: true, bannedReason: reason, bannedAt: Date.now(), bannedUntil: Number($('bDays').value) ? Date.now() + Number($('bDays').value) * 864e5 : null });
+    logAdmin('user_ban', `${usersCache[banUid]?.email || banUid}: ${reason}`);
+    modal('bModal').hide(); toast('User banned ✔'); loadUsers();
+});
+$('aSave').onclick = guard(async () => {
+    const amt = num('aAmt'), type = $('aType').value, note = val('aNote');
+    if (amt <= 0) { toast('Enter a valid amount', false); return; }
+    let blocked = false;
+    await tx(`users/${adjUid}`, u => {
+        if (!u) return u;
+        if (type === 'deduct') { if ((u.balance || 0) < amt) { blocked = true; return; } u.balance -= amt; u.winningCash = Math.max(0, Math.min(u.winningCash || 0, u.balance)); }
+        else { u.balance = (u.balance || 0) + amt; if (type === 'add_winning') u.winningCash = (u.winningCash || 0) + amt; if (type === 'add_bonus') u.bonusCash = (u.bonusCash || 0) + amt; }
+        return u;
+    });
+    if (blocked) { toast('Insufficient balance to deduct', false); return; }
+    await addTxn(adjUid, type === 'deduct' ? 'admin_debit' : (type === 'add_balance' ? 'deposit' : 'admin_credit'), type === 'deduct' ? -amt : amt, note || (type === 'deduct' ? 'Deducted by admin' : 'Added by admin'));
+    logAdmin('wallet_' + type, `${usersCache[adjUid]?.email || adjUid} ${amt} ${note}`);
+    modal('aModal').hide(); toast('Wallet updated ✔'); loadUsers();
+});
+
+// ---------- deposits (UTR verify) ----------
+async function loadDeposits() {
+    const all = (await get(ref(db, 'deposits'))).val() || {};
+    const f = $('dFilter').value, uc = {}; Object.values(all).forEach(x => { const k = String(x.utr || '').trim(); if (k) uc[k] = (uc[k] || 0) + 1; });
+    const rows = Object.entries(all).filter(([, d]) => !f || d.status === f).sort((a, b) => (Number(b[1].timestamp) || 0) - (Number(a[1].timestamp) || 0));
+    $('dBody').innerHTML = rows.map(([id, d]) => `<tr><td>${esc(d.userName)}<br><small style="color:var(--muted)">${esc(d.userEmail)}</small></td><td><b>${money(d.amount)}</b></td><td><code>${esc(d.utr)}</code>${uc[String(d.utr || '').trim()] > 1 ? ' <span class="pill p-rejected">DUPLICATE</span>' : ''}</td><td>${fmtDT(d.timestamp)}</td><td><span class="pill p-${esc(d.status)}">${esc(d.status)}</span>${d.adminNote ? `<br><small>${esc(d.adminNote)}</small>` : ''}</td>
+    <td class="text-nowrap">${d.status === 'pending' ? `<button class="btn btn-sm btn-success" data-a="ok" data-id="${id}">Approve</button> <button class="btn btn-sm btn-danger" data-a="no" data-id="${id}">Reject</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="text-center" style="color:var(--muted)">Nothing here.</td></tr>';
+}
+$('dFilter').onchange = guard(loadDeposits);
+$('dBody').onclick = guard(async e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const id = b.dataset.id, approve = b.dataset.a === 'ok';
+    const all = (await get(ref(db, 'deposits'))).val() || {}, d0 = all[id]; if (!d0) return;
+    if (approve) {
+        const dup = Object.entries(all).find(([k, x]) => k !== id && x.status === 'approved' && x.utr && String(x.utr).trim() === String(d0.utr).trim());
+        if (dup) { toast('Ye UTR pehle approve ho chuka hai (duplicate)!', false); return; }
+        if (!confirm(`UTR ${d0.utr} bank me check kar liya? ${money(d0.amount)} balance me add hoga.`)) return;
+    }
+    const note = approve ? '' : prompt('Reject reason:', 'UTR not found');
+    if (note === null) return;
+    const lock = await tx(`deposits/${id}`, d => { if (!d || d.status !== 'pending') return; d.status = approve ? 'approved' : 'rejected'; d.adminNote = note; d.processedAt = Date.now(); return d; });
+    if (!lock.committed) { toast(await whyNot(`deposits/${id}`), false); loadDeposits(); return; }
+    const d = lock.snapshot.val();
+    if (approve) {
+        const st = (await get(ref(db, 'settings'))).val() || {}, bonus = adminBonus(st, d.amount);
+        await userTxOrRevert(d.userId, u => { if (!u) return u; u.balance = (u.balance || 0) + d.amount + bonus; if (bonus) u.bonusCash = (u.bonusCash || 0) + bonus; return u; }, `deposits/${id}`, { status: 'pending', adminNote: null, processedAt: null });
+        await addTxn(d.userId, 'deposit', d.amount, `Deposit approved (UTR ${d.utr})`);
+        if (bonus) await addTxn(d.userId, 'admin_credit', bonus, `Deposit bonus ${st.depositBonusPct}%`);
+    }
+    logAdmin(approve ? 'deposit_approve' : 'deposit_reject', `${d.userEmail} ${d.amount} UTR ${d.utr}`);
+    toast(approve ? 'Deposit approved ✔' : 'Rejected'); loadDeposits(); refreshBadges();
+});
+
+// ---------- withdrawals ----------
+let wRows = [], procId = null, procW = null;
+// If updating the user's wallet fails (e.g. permission denied), put the request back to pending so nothing is lost
+async function userTxOrRevert(uid, fn, revertPath, revertData) {
+    try { const r = await tx(`users/${uid}`, fn); if (!r.committed) throw new Error('User wallet not updated'); }
+    catch (e) { try { await update(ref(db, revertPath), revertData); } catch (e2) { console.error(e2); } throw e; }
+}
+async function loadWithdrawals() {
+    const all = (await get(ref(db, 'withdrawals'))).val() || {};
+    const f = $('wFilter').value;
+    wRows = Object.entries(all).filter(([, w]) => !f || w.status === f).sort((a, b) => (Number(b[1].requestTimestamp) || 0) - (Number(a[1].requestTimestamp) || 0));
+    $('wBody').innerHTML = wRows.map(([id, w]) => `<tr><td>${esc(w.userName)}<br><small style="color:var(--muted)">${esc(w.userEmail)}</small></td><td><b>${money(w.amount)}</b>${w.fee ? `<br><small style="color:var(--muted)">fee ${money(w.fee)} → pay <b style="color:var(--accent)">${money(w.netAmount)}</b></small>` : ''}</td><td>${esc(w.methodDetails?.accountInfo)} <button class="btn btn-sm btn-link p-0" data-copy="${esc(w.methodDetails?.accountInfo)}"><i class="bi bi-clipboard"></i></button></td><td>${fmtDT(w.requestTimestamp)}</td><td><span class="pill p-${esc(w.status)}">${esc(w.status)}</span>${w.utr ? `<br><small>UTR: <code>${esc(w.utr)}</code></small>` : ''}${w.adminNote ? `<br><small>${esc(w.adminNote)}</small>` : ''}</td>
+    <td class="text-nowrap">${w.status === 'pending' ? `<button class="btn btn-sm btn-warning" data-a="proc" data-id="${id}">Approve / Reject</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="text-center" style="color:var(--muted)">Nothing here.</td></tr>';
+}
+$('wFilter').onchange = guard(loadWithdrawals);
+$('wCsv').onclick = () => {
+    const head = ['Name', 'Email', 'Amount', 'PayTo', 'Requested', 'Status', 'UTR', 'Note'];
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const csv = [head.join(',')].concat(wRows.map(([, w]) => [w.userName, w.userEmail, w.amount, w.methodDetails?.accountInfo, fmtDT(w.requestTimestamp), w.status, w.utr, w.adminNote].map(q).join(','))).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'withdrawals.csv'; a.click();
+};
+$('wBody').onclick = guard(async e => {
+    const c = e.target.closest('[data-copy]');
+    if (c) { await navigator.clipboard.writeText(c.dataset.copy); toast('Copied'); return; }
+    const b = e.target.closest('button[data-a="proc"]'); if (!b) return;
+    procId = b.dataset.id; procW = wRows.find(([i]) => i === procId)[1];
+    $('wInfo').textContent = `${procW.userName} (${procW.userEmail})\nAmount: ${money(procW.amount)}${procW.fee ? `\nFee: ${money(procW.fee)}\nPAY: ${money(procW.netAmount)}` : ''}\nPay to: ${procW.methodDetails?.accountInfo || '-'}`;
+    const upiId = String(procW.methodDetails?.accountInfo || '').trim(), payA = $('wUpiPay');
+    if (/^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upiId)) { payA.href = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(procW.userName || 'Player')}&am=${Number(procW.netAmount ?? procW.amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent('Tournament withdrawal')}`; payA.style.display = 'inline-block'; } else payA.style.display = 'none';
+    $('wUtr').value = ''; $('wNote').value = ''; modal('wModal').show();
+});
+async function processW(approve) {
+    const utr = val('wUtr'), note = val('wNote');
+    if (approve && utr.length < 6) { toast('Approve ke liye sahi UTR daalo', false); return; }
+    if (!approve && !note) { toast('Reject ka reason likho', false); return; }
+    const lock = await tx(`withdrawals/${procId}`, w => { if (!w || w.status !== 'pending') return; w.status = approve ? 'approved' : 'rejected'; w.adminNote = note; w.utr = approve ? utr : null; w.processedAt = Date.now(); return w; });
+    if (!lock.committed) { toast(await whyNot(`withdrawals/${procId}`), false); loadWithdrawals(); return; }
+    const w = lock.snapshot.val();
+    if (approve) {
+        await userTxOrRevert(w.userId, u => { if (!u) return u; u.balance = Math.max(0, (u.balance || 0) - w.amount); return u; }, `withdrawals/${procId}`, { status: 'pending', adminNote: null, utr: null, processedAt: null });
+        await addTxn(w.userId, 'withdraw_paid', 0, `Withdrawal ${money(w.amount)} paid. UTR: ${utr}`);
+    } else {
+        await userTxOrRevert(w.userId, u => { if (!u) return u; u.winningCash = (u.winningCash || 0) + w.amount; return u; }, `withdrawals/${procId}`, { status: 'pending', adminNote: null, utr: null, processedAt: null });
+        await addTxn(w.userId, 'withdraw_refund', w.amount, 'Withdrawal rejected — amount returned: ' + note);
+    }
+    logAdmin(approve ? 'withdraw_approve' : 'withdraw_reject', `${w.userEmail} ${w.amount} ${approve ? 'UTR ' + utr : note}`);
+    modal('wModal').hide(); toast(approve ? 'Approved ✔ (UTR saved)' : 'Rejected & refunded'); loadWithdrawals(); refreshBadges();
+}
+$('wApprove').onclick = guard(() => processW(true));
+$('wReject').onclick = guard(() => processW(false));
+
+// ---------- notifications ----------
+async function loadNotifs() {
+    const all = (await get(query(ref(db, 'notifications'), limitToLast(30)))).val() || {};
+    $('nList').innerHTML = Object.entries(all).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)).map(([id, n]) => `<div class="d-flex justify-content-between align-items-start border-bottom py-2" style="border-color:var(--line)!important"><div><b>${esc(n.title)}</b><div class="small" style="white-space:pre-wrap">${esc(n.message)}</div><small style="color:var(--muted)">${fmtDT(n.timestamp)}</small></div><button class="btn btn-sm btn-outline-danger" data-id="${id}">Delete</button></div>`).join('') || '<p style="color:var(--muted)">No notifications.</p>';
+}
+$('nSend').onclick = guard(async () => {
+    if (!val('nTitle') || !val('nMsg')) { toast('Enter title and message', false); return; }
+    const to = val('nTo').toLowerCase(), nd = { title: val('nTitle'), message: val('nMsg'), timestamp: Date.now() };
+    if (to) {
+        const us = (await get(query(ref(db, 'users'), limitToLast(500)))).val() || {}, f = Object.entries(us).find(([id, u]) => id.toLowerCase() === to || String(u.email || '').toLowerCase() === to);
+        if (!f) { toast('User nahi mila', false); return; } await push(ref(db, `userNotifications/${f[0]}`), nd); $('nTo').value = '';
+    } else await push(ref(db, 'notifications'), nd);
+    logAdmin('notification', val('nTitle'));
+    $('nTitle').value = ''; $('nMsg').value = ''; toast('Sent ✔'); loadNotifs();
+});
+$('nList').onclick = guard(async e => { const b = e.target.closest('button[data-id]'); if (b && confirm('Delete?')) { await remove(ref(db, `notifications/${b.dataset.id}`)); loadNotifs(); } });
+
+// ---------- coupons ----------
+async function loadCoupons() {
+    const all = (await get(ref(db, 'coupons'))).val() || {};
+    $('cBody').innerHTML = Object.entries(all).map(([code, c]) => `<tr><td><b>${esc(code)}</b></td><td>${money(c.amount)}</td><td>${c.used || 0}/${c.maxUses || '∞'}</td><td>${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '-'}</td><td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" data-code="${esc(code)}" ${c.active !== false ? 'checked' : ''}></div></td><td><button class="btn btn-sm btn-outline-danger" data-del="${esc(code)}">Del</button></td></tr>`).join('') || '<tr><td colspan="6" class="text-center" style="color:var(--muted)">No coupons.</td></tr>';
+}
+$('cSave').onclick = guard(async () => {
+    const code = val('cCode').toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!code || num('cAmt') <= 0) { toast('Enter code and amount', false); return; }
+    const exp = $('cExp').value ? new Date($('cExp').value + 'T23:59:59').getTime() : null;
+    await set(ref(db, `coupons/${code}`), { amount: num('cAmt'), maxUses: num('cMax'), used: 0, active: true, expiresAt: exp, createdAt: Date.now() });
+    logAdmin('coupon_create', `${code} ${num('cAmt')}`);
+    $('cCode').value = ''; $('cAmt').value = ''; toast('Coupon created ✔'); loadCoupons();
+});
+$('cBody').onchange = guard(async e => { const c = e.target.dataset.code; if (c) await update(ref(db, `coupons/${c}`), { active: e.target.checked }); });
+$('cBody').onclick = guard(async e => { const c = e.target.closest('[data-del]')?.dataset.del; if (c && confirm('Delete coupon ' + c + '?')) { await remove(ref(db, `coupons/${c}`)); loadCoupons(); } });
+
+// ---------- games & banners (gallery upload) ----------
+let gData = '', pData = '';
+async function loadContent() {
+    const [g, p] = await Promise.all([get(ref(db, 'games')), get(ref(db, 'promotions'))]);
+    $('gList').innerHTML = Object.entries(g.val() || {}).sort((a, b) => (a[1].order || 0) - (b[1].order || 0)).map(([id, x]) => `<div class="d-flex align-items-center gap-2 py-2 border-bottom" style="border-color:var(--line)!important"><img src="${esc(x.imageUrl)}" style="width:48px;height:48px;object-fit:cover;border-radius:8px"><div class="flex-grow-1">${esc(x.name)} <small style="color:var(--muted)">#${x.order || 0}</small></div><button class="btn btn-sm btn-outline-light" data-ge="${id}" data-n="${esc(x.name)}" data-o="${x.order || 0}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-light" data-gi="${id}"><i class="bi bi-image"></i></button> <button class="btn btn-sm btn-outline-danger" data-g="${id}">Del</button></div>`).join('') || '<p style="color:var(--muted)">No games.</p>';
+    $('pList').innerHTML = Object.entries(p.val() || {}).sort((a, b) => (a[1].order || 0) - (b[1].order || 0)).map(([id, x]) => `<div class="d-flex align-items-center gap-2 py-2 border-bottom" style="border-color:var(--line)!important"><img src="${esc(x.imageUrl)}" style="width:80px;height:40px;object-fit:cover;border-radius:6px"><div class="flex-grow-1 small text-truncate">${esc(x.link || '')}</div><input type="number" class="form-control form-control-sm" style="width:56px" title="Order" data-pord="${id}" value="${x.order || 0}"><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" data-pact="${id}" ${x.active !== false ? 'checked' : ''}></div><button class="btn btn-sm btn-outline-danger" data-p="${id}">Del</button></div>`).join('') || '<p style="color:var(--muted)">No banners.</p>';
+}
+$('gPick').onclick = guard(async () => { gData = await pickImage(400, 'image/jpeg', 0.8); setPrev('gPrev', gData); $('gImg').value = ''; });
+$('pPick').onclick = guard(async () => { pData = await pickImage(1000, 'image/jpeg', 0.75); setPrev('pPrev', pData); $('pImg').value = ''; });
+$('gImg').oninput = () => { gData = ''; setPrev('gPrev', isUrl(val('gImg')) ? val('gImg') : ''); };
+$('pImg').oninput = () => { pData = ''; setPrev('pPrev', isUrl(val('pImg')) ? val('pImg') : ''); };
+$('gSave').onclick = guard(async () => {
+    const img = gData || val('gImg');
+    if (!val('gName') || !isImg(img)) { toast('Game name aur image (gallery ya https URL) do', false); return; }
+    await push(ref(db, 'games'), { name: val('gName'), imageUrl: img, order: num('gOrder') });
+    logAdmin('game_add', val('gName'));
+    $('gName').value = ''; $('gImg').value = ''; $('gOrder').value = ''; gData = ''; setPrev('gPrev', ''); loadContent();
+});
+$('pSave').onclick = guard(async () => {
+    const img = pData || val('pImg');
+    if (!isImg(img)) { toast('Banner image (gallery ya https URL) do', false); return; }
+    const link = val('pLink'); if (link && !isUrl(link)) { toast('Link must start with https://', false); return; }
+    await push(ref(db, 'promotions'), { imageUrl: img, link: link || null });
+    logAdmin('banner_add', link || 'image');
+    $('pImg').value = ''; $('pLink').value = ''; pData = ''; setPrev('pPrev', ''); loadContent();
+});
+$('gList').onclick = guard(async e => { const ge = e.target.closest('[data-ge]');
+    if (ge) { const n = prompt('Game name:', ge.dataset.n); if (n === null) return; const o = prompt('Order (1,2,3):', ge.dataset.o); await update(ref(db, `games/${ge.dataset.ge}`), { name: n.trim() || ge.dataset.n, order: Number(o) || 0 }); logAdmin('game_edit', n); loadContent(); return; }
+    const gi = e.target.closest('[data-gi]')?.dataset.gi; if (gi) { await update(ref(db, `games/${gi}`), { imageUrl: await pickImage(400, 'image/jpeg', 0.8) }); toast('Image updated ✔'); loadContent(); return; } const id = e.target.closest('[data-g]')?.dataset.g; if (id && confirm('Delete game?')) { await remove(ref(db, `games/${id}`)); loadContent(); } });
+$('pList').onchange = guard(async e => {
+    const t = e.target;
+    if (t.dataset.pact) await update(ref(db, `promotions/${t.dataset.pact}`), { active: t.checked });
+    if (t.dataset.pord) await update(ref(db, `promotions/${t.dataset.pord}`), { order: Number(t.value) || 0 });
+    toast('Saved ✔');
+});
+$('pList').onclick = guard(async e => { const id = e.target.closest('[data-p]')?.dataset.p; if (id && confirm('Delete banner?')) { await remove(ref(db, `promotions/${id}`)); loadContent(); } });
+
+// ---------- support ----------
+let ticketId = null, ticketsCache = {};
+async function loadSupport() {
+    const tg = (await get(ref(db, 'settings/telegramSupport'))).val();
+    $('tgCard').innerHTML = tg ? `<i class="bi bi-telegram" style="color:#38BDF8"></i> <b>Telegram Customer Service:</b> <a href="${esc(tg)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(tg)}</a> <button class="btn btn-sm btn-outline-light ms-1" data-copy="${esc(tg)}">Copy</button>` : '<i class="bi bi-telegram"></i> Telegram link set nahi hai — Settings me "Telegram Customer Service link" daalo.';
+    ticketsCache = (await get(ref(db, 'support'))).val() || {};
+    const f = $('sFilter').value;
+    $('sList').innerHTML = Object.entries(ticketsCache).filter(([, t]) => !f || t.status === f).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)).map(([id, t]) => `<div class="border-bottom py-2" style="border-color:var(--line)!important"><div class="d-flex justify-content-between"><b>${esc(t.type)} <small style="color:var(--muted)">· ${esc(t.name || t.email)}</small></b><span class="pill p-${esc(t.status)}">${esc(t.status)}</span></div><div class="small" style="white-space:pre-wrap">${esc(t.message)}</div>${t.adminReply ? `<div class="small mt-1" style="color:var(--accent)">Reply: ${esc(t.adminReply)}</div>` : ''}<div class="d-flex justify-content-between align-items-center mt-1"><small style="color:var(--muted)">${fmtDT(t.timestamp)} · ${esc(t.email)}</small><button class="btn btn-sm btn-outline-warning" data-id="${id}">Reply</button></div></div>`).join('') || '<p style="color:var(--muted)">No tickets.</p>';
+}
+$('tgCard').onclick = guard(async e => { const c = e.target.closest('[data-copy]'); if (c) { await navigator.clipboard.writeText(c.dataset.copy); toast('Copied'); } });
+$('sCanned').onchange = () => { if ($('sCanned').value) $('sReply').value = $('sCanned').value; };
+$('sFilter').onchange = guard(loadSupport);
+$('sList').onclick = e => { const id = e.target.closest('button[data-id]')?.dataset.id; if (!id) return; ticketId = id; const t = ticketsCache[id]; $('sInfo').textContent = `${t.type} — ${t.name || t.email}\n\n${t.message}`; $('sReply').value = t.adminReply || ''; $('sStatus').value = t.status || 'open'; modal('sModal').show(); };
+$('sSave').onclick = guard(async () => { await update(ref(db, `support/${ticketId}`), { adminReply: $('sReply').value.trim(), status: $('sStatus').value, repliedAt: Date.now() }); modal('sModal').hide(); toast('Saved ✔'); loadSupport(); refreshBadges(); });
+
+// ---------- settings ----------
+const SETTINGS = [
+    ['logoUrl', 'App logo (gallery se chuno)', 'logo'],
+    ['upiDetails', 'Your UPI ID / number (shown in Add Amount)', 'text'], ['supportContact', 'Support contact (WhatsApp / email)', 'text'], ['telegramSupport', 'Telegram Customer Service link (https://t.me/username)', 'text'], ['telegramChannel', 'Telegram channel/group link (optional)', 'text'],
+    ['minWithdraw', 'Minimum withdraw ₹', 'number'], ['minDeposit', 'Minimum deposit ₹', 'number'], ['newUserBalance', 'New user starting balance ₹', 'number'], ['newUserBonus', 'New user bonus cash ₹', 'number'],
+    ['referralBonus', 'Referral bonus ₹ (to referrer)', 'number'], ['referralMilestones', 'Referral milestones JSON, e.g. {"5":20,"10":50}', 'text'],
+    ['dailyReward', 'Daily reward base ₹ (0 = off)', 'number'], ['dailyStreakStep', 'Daily streak extra per day ₹', 'number'], ['spinPrizes', 'Spin prizes (comma separated ₹, 0 = no prize)', 'text'],
+    ['siteUrl', 'Your website link (https://...) — referral link isi se banta hai', 'text'], ['apkUrl', 'APK download link (optional)', 'text'],
+    ['referralDescription', 'Referral description text', 'text'], ['maintenanceMsg', 'Maintenance message (khali = app chalu)', 'text'], ['announcement', 'Home announcement / marquee text', 'text'], ['maintenanceUntil', 'Maintenance kab khatam hoga (e.g. 6:30 PM)', 'text'], ['withdrawFeePct', 'Withdraw fee %', 'number'], ['maxWithdraw', 'Max withdraw per request ₹', 'number'], ['youtubeUrl', 'YouTube channel link', 'text'], ['instagramUrl', 'Instagram link', 'text'], ['depositBonusPct', 'Deposit bonus % (0 = off)', 'number'], ['depositBonusMin', 'Min deposit for bonus ₹', 'number'], ['maxWithdrawDay', 'Max withdraw per day (per user) ₹', 'number'],
+    ['kycRequired', 'KYC zaroori withdraw se pehle? (yes / no)', 'text'], ['vipTiers', 'VIP tiers JSON e.g. [{"name":"Silver","min":20,"disc":2,"icon":"🥈"}]', 'text'], ['depositBonusTiers', 'Deposit bonus tiers JSON e.g. [{"min":100,"pct":5},{"min":500,"pct":10}]', 'text'], ['cashbackPct', 'Weekly cashback % on net loss', 'number'], ['cashbackMax', 'Max cashback per user ₹ (0 = no cap)', 'number'], ['vapidKey', 'Firebase VAPID key (push notifications)', 'text'], ['razorpayKeyId', 'Razorpay Key ID (public key only)', 'text'], ['functionsUrl', 'Cloud Functions URL (https://REGION-PROJECT.cloudfunctions.net/api)', 'text'],
+    ['policyPrivacy', 'Privacy policy', 'area'], ['policyTerms', 'Terms & conditions', 'area'], ['policyRefund', 'Refund & cancellation', 'area'], ['policyFairPlay', 'Fair play policy', 'area']
+];
+async function loadSettings() {
+    const s = (await get(ref(db, 'settings'))).val() || {};
+    $('setForm').innerHTML = SETTINGS.map(([k, label, type]) => {
+        if (type === 'logo') return `<div class="col-12"><label class="form-label">${esc(label)}</label><div class="d-flex gap-2 align-items-center"><div class="prev" id="logoPrev" style="width:72px;height:72px;flex:none">${s[k] ? `<img src="${esc(s[k])}">` : 'No logo'}</div><button class="btn btn-outline-light" id="logoPick"><i class="bi bi-images"></i> Gallery se chuno</button><button class="btn btn-outline-danger" id="logoDel">Remove</button><input type="hidden" data-k="${k}" id="logoVal" value="${esc(s[k] || '')}"></div></div>`;
+        return `<div class="${type === 'area' ? 'col-12' : 'col-md-6'}"><label class="form-label">${esc(label)}</label>${type === 'area' ? `<textarea class="form-control" rows="3" data-k="${k}">${esc(s[k] || '')}</textarea>` : `<input class="form-control" type="${type}" data-k="${k}" value="${esc(typeof s[k] === 'object' ? JSON.stringify(s[k]) : (s[k] ?? ''))}">`}</div>`;
+    }).join('');
+    $('logoPick').onclick = guard(async () => { const d = await pickImage(256, 'image/png'); $('logoVal').value = d; $('logoPrev').innerHTML = `<img src="${d}">`; toast('Logo chuna — ab "Save settings" dabao'); });
+    $('logoDel').onclick = () => { $('logoVal').value = ''; $('logoPrev').textContent = 'No logo'; };
+}
+$('setSave').onclick = guard(async () => {
+    const data = {};
+    for (const [k, , type] of SETTINGS) {
+        const el = document.querySelector(`[data-k="${k}"]`); let v = el.value.trim();
+        if (type === 'number') data[k] = v === '' ? null : Number(v);
+        else if (type === 'logo') { if (v && !isImg(v)) { toast('Logo invalid', false); return; } data[k] = v || null; }
+        else if (k === 'telegramSupport' || k === 'telegramChannel') { if (v.startsWith('@')) v = 'https://t.me/' + v.slice(1); else if (/^t\.me\//i.test(v)) v = 'https://' + v; if (v && !/^https:\/\/(t|telegram)\.me\//i.test(v)) { toast('Telegram link https://t.me/username jaisa ho', false); return; } data[k] = v || null; }
+        else if (k === 'functionsUrl' && v && !isUrl(v)) { toast('functionsUrl must start with https://', false); return; }
+        else if ((k === 'siteUrl' || k === 'apkUrl' || k === 'youtubeUrl' || k === 'instagramUrl') && v && !isUrl(v)) { toast(`${k} must start with https://`, false); return; }
+        else if ((k === 'referralMilestones' || k === 'vipTiers' || k === 'depositBonusTiers') && v) { try { JSON.parse(v); } catch (e) { toast('Milestones must be valid JSON', false); return; } data[k] = v; }
+        else data[k] = v === '' ? null : (type === 'area' ? el.value : v);
+    }
+    if (data.siteUrl) data.siteUrl = data.siteUrl.replace(/\/+$/, '');
+    await update(ref(db, 'settings'), data); logAdmin('settings_save', ''); toast('Settings saved ✔');
+});
+$('refTest').onclick = guard(async () => {
+    const s = (await get(ref(db, 'settings/siteUrl'))).val();
+    if (!s || !isUrl(s)) { $('refOut').textContent = '❌ siteUrl khali ya galat hai. Poora link daalo, e.g. https://yoursite.com/Tournament_user_v4.html (file ka naam ke saath, agar wo index.html nahi hai).'; return; }
+    const link = `${String(s).split('?')[0].replace(/\/+$/, '')}?ref=TEST123`, noFile = !/\.html?$/i.test(String(s).split('?')[0]);
+    $('refOut').innerHTML = `Referral link: <code>${esc(link)}</code> — <a href="${esc(link)}" target="_blank" rel="noopener" style="color:var(--accent)">open karke check karo</a>.` + (/^https?:\/\/(localhost|127\.|10\.|192\.168\.|192\.0\.0\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(String(s)) ? '<br>⚠ siteUrl local/private IP hai - dusre phone par nahi khulega. Public hosting ka link daalo.' : '') + (/%20|\s|\(|\)/.test(String(s)) ? '<br>⚠ File name me space ya brackets hain (jaise %20%281%29). File ko Tournament_user.html ya index.html naam se upload karo.' : '') + (noFile ? '<br>⚠ siteUrl me file ka naam nahi hai. Agar aapki user file ka naam index.html nahi hai to link 404 dega — poora link daalo (…/Tournament_user_v4.html). Browser me khuli live site se share karne par app khud sahi URL use karti hai.' : '');
+});
+
+$('backupBtn').onclick = guard(async () => {
+    const nodes = ['users', 'tournaments', 'games', 'promotions', 'settings', 'coupons', 'deposits', 'withdrawals', 'support', 'notifications'], out = { exportedAt: new Date().toISOString() };
+    for (const n of nodes) out[n] = (await get(ref(db, n))).val() || {};
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' })); a.download = 'backup-' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+    logAdmin('backup_export', ''); toast('Backup download ho raha hai');
+});
+// ===================== v8 NEW FEATURES (roles, fraud, KYC, proofs, schedules, cashback, charts, bulk CSV, chat) =====================
+const xJ = (v, fb) => { if (v && typeof v === 'object') return v; try { return v ? JSON.parse(v) : fb; } catch (e) { return fb; } };
+const pad2 = n => String(n).padStart(2, '0');
+const wkKey = (d = new Date()) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const n = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - n); const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return `W-${t.getUTCFullYear()}-${pad2(Math.ceil(((t - y0) / 86400000 + 1) / 7))}`; };
+const moKey = (d = new Date()) => `M-${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+function adminBonus(st, amount) {
+    const tiers = xJ(st.depositBonusTiers, null);
+    if (Array.isArray(tiers) && tiers.length) { const hit = tiers.filter(t => amount >= Number(t.min)).sort((a, b) => b.min - a.min)[0]; return hit ? Math.floor(amount * Number(hit.pct) / 100) : 0; }
+    return (st.depositBonusPct > 0 && amount >= (st.depositBonusMin || 0)) ? Math.floor(amount * st.depositBonusPct / 100) : 0;
+}
+
+// ---------- roles (sub-admins) ----------
+const ROLE_TABS = { super: '*', finance: ['dashboard', 'users', 'deposits', 'withdrawals', 'kyc', 'fraud', 'ops', 'logs'], support: ['dashboard', 'users', 'notify', 'support', 'kyc', 'proofs'], tournament: ['dashboard', 'tournaments', 'content', 'proofs', 'notify', 'sched'] };
+let myRole = 'super';
+function allowedTab(t) { const r = ROLE_TABS[myRole] || ROLE_TABS.support; return r === '*' || r.includes(t); }
+function applyRoleTabs() { document.querySelectorAll('#tabs button').forEach(b => { b.style.display = allowedTab(b.dataset.tab) ? '' : 'none'; }); }
+async function xBadges() {
+    try {
+        const [k, p] = await Promise.all([get(ref(db, 'kyc')), get(ref(db, 'proofs'))]);
+        const set_ = (id, n) => { const el = $(id); if (!el) return; el.textContent = n; el.style.display = n ? 'inline-block' : 'none'; };
+        set_('bd-kyc', Object.values(k.val() || {}).filter(x => x.status === 'pending').length);
+        let pp = 0; Object.values(p.val() || {}).forEach(t => Object.values(t || {}).forEach(x => { if (x.status === 'pending') pp++; })); set_('bd-proofs', pp);
+    } catch (e) { /* role may not read these */ }
+}
+async function loadAdmins() {
+    if (myRole !== 'super') { $('adminBody').innerHTML = '<p style="color:var(--muted)">Sirf super admin.</p>'; return; }
+    const us = (await get(query(ref(db, 'users'), limitToLast(500)))).val() || {}; usersCache = us;
+    const adm = Object.entries(us).filter(([, u]) => u.isAdmin);
+    $('adminBody').innerHTML = adm.map(([uid, u]) => `<tr><td>${esc(u.email)}</td><td><select class="form-select form-select-sm" data-role="${uid}" style="max-width:160px">${['super', 'finance', 'support', 'tournament'].map(r => `<option ${((u.role || 'super') === r) ? 'selected' : ''}>${r}</option>`).join('')}</select></td><td>${uid === me.uid ? '<span class="pill p-ongoing">you</span>' : `<button class="btn btn-sm btn-outline-danger" data-rm="${uid}">Remove admin</button>`}</td></tr>`).join('') || '<tr><td colspan="3">No admins</td></tr>';
+}
+$('adminBody').onchange = guard(async e => { const u = e.target.dataset.role; if (!u) return; await update(ref(db, `users/${u}`), { role: e.target.value }); logAdmin('admin_role', `${usersCache[u]?.email || u} -> ${e.target.value}`); toast('Role updated ✔'); });
+$('adminBody').onclick = guard(async e => { const u = e.target.closest('[data-rm]')?.dataset.rm; if (!u || !confirm('Admin access hata dein?')) return; await update(ref(db, `users/${u}`), { isAdmin: false, role: null }); logAdmin('admin_remove', usersCache[u]?.email || u); toast('Removed'); loadAdmins(); });
+$('admAdd').onclick = guard(async () => {
+    if (myRole !== 'super') { toast('Sirf super admin', false); return; }
+    const q = val('admEmail').toLowerCase(); if (!q) { toast('Email daalo', false); return; }
+    const us = (await get(query(ref(db, 'users'), limitToLast(500)))).val() || {}, f = Object.entries(us).find(([id, u]) => id.toLowerCase() === q || String(u.email || '').toLowerCase() === q);
+    if (!f) { toast('User nahi mila (pehle app me signup karna hoga)', false); return; }
+    await update(ref(db, `users/${f[0]}`), { isAdmin: true, role: $('admRole').value }); logAdmin('admin_add', `${q} as ${$('admRole').value}`); $('admEmail').value = ''; toast('Admin added ✔'); loadAdmins();
+});
+
+// ---------- fraud / anti-cheat ----------
+async function loadFraud() {
+    const [dv, us, dp, wd] = await Promise.all(['devices', 'users', 'deposits', 'withdrawals'].map(n => get(ref(db, n))));
+    const users = us.val() || {}; usersCache = users; const flags = [], em = u => users[u]?.email || u;
+    Object.entries(dv.val() || {}).forEach(([d, m]) => { const ids = Object.keys(m || {}); if (ids.length > 1) flags.push({ sev: 'High', type: 'Same device, multiple accounts', detail: ids.map(em).join(', '), uids: ids }); });
+    const byUpi = {}; Object.entries(users).forEach(([id, u]) => { const k = String(u.upiId || '').trim().toLowerCase(); if (k) (byUpi[k] = byUpi[k] || []).push(id); });
+    Object.entries(byUpi).forEach(([k, ids]) => { if (ids.length > 1) flags.push({ sev: 'High', type: 'Same UPI on multiple accounts', detail: `${k} → ${ids.map(em).join(', ')}`, uids: ids }); });
+    const byUtr = {}; Object.values(dp.val() || {}).forEach(d => { const k = String(d.utr || '').trim().toUpperCase(); if (k) (byUtr[k] = byUtr[k] || new Set()).add(d.userId); });
+    Object.entries(byUtr).forEach(([k, s]) => { if (s.size > 1) flags.push({ sev: 'High', type: 'Same UTR used by different users', detail: `${k} → ${[...s].map(em).join(', ')}`, uids: [...s] }); });
+    const now = Date.now(), per = {};
+    Object.values(wd.val() || {}).forEach(w => { const t = Number(w.requestTimestamp) || 0; if (now - t < 864e5) (per[w.userId] = per[w.userId] || []).push(w); });
+    Object.entries(per).forEach(([uid, l]) => {
+        if (l.length >= 3) flags.push({ sev: 'Medium', type: 'Many withdrawals in 24h', detail: `${em(uid)}: ${l.length} requests, ${money(l.reduce((a, w) => a + (w.amount || 0), 0))}`, uids: [uid] });
+        const c = Number(users[uid]?.createdAt) || 0; if (c && Math.min(...l.map(w => Number(w.requestTimestamp) || now)) - c < 864e5) flags.push({ sev: 'Medium', type: 'Withdrawal within 24h of signup', detail: em(uid), uids: [uid] });
+    });
+    const el = $('bd-fraud'); if (el) { el.textContent = flags.length; el.style.display = flags.length ? 'inline-block' : 'none'; }
+    $('fraudBody').innerHTML = flags.map((f, i) => `<tr><td><span class="pill ${f.sev === 'High' ? 'p-rejected' : 'p-pending'}">${f.sev}</span></td><td>${esc(f.type)}</td><td style="word-break:break-all">${esc(f.detail)}</td><td class="text-nowrap">${f.uids.filter(u => !users[u]?.isAdmin).map(u => `<button class="btn btn-sm btn-danger" data-ban="${u}">Ban ${esc((users[u]?.ign || users[u]?.displayName || '').slice(0, 8))}</button>`).join(' ')}</td></tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted)">Koi suspicious activity nahi mili ✔</td></tr>';
+}
+$('fraudBody').onclick = e => { const u = e.target.closest('[data-ban]')?.dataset.ban; if (!u) return; banUid = u; $('bTitle').textContent = 'Ban — ' + (usersCache[u]?.email || u); $('bReason').value = 'Fraud / multi-account'; $('bDays').value = '0'; modal('bModal').show(); };
+$('fraudScan').onclick = guard(loadFraud);
+
+// ---------- KYC review ----------
+async function loadKyc() {
+    const all = (await get(ref(db, 'kyc'))).val() || {}, f = $('kFilter').value;
+    $('kBody').innerHTML = Object.entries(all).filter(([, k]) => !f || k.status === f).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0)).map(([uid, k]) => `<tr><td>${esc(k.name)}<br><small style="color:var(--muted)">${esc(k.email)}</small></td><td><code>${esc(k.pan)}</code></td><td><img src="${esc(k.doc)}" data-view="${uid}" style="height:44px;border-radius:6px;cursor:pointer"></td><td>${fmtDT(k.ts)}</td><td><span class="pill p-${esc(k.status)}">${esc(k.status)}</span>${k.note ? `<br><small>${esc(k.note)}</small>` : ''}</td><td class="text-nowrap">${k.status === 'pending' ? `<button class="btn btn-sm btn-success" data-ok="${uid}">Approve</button> <button class="btn btn-sm btn-danger" data-no="${uid}">Reject</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="text-center" style="color:var(--muted)">Nothing here.</td></tr>';
+}
+$('kFilter').onchange = guard(loadKyc);
+$('kBody').onclick = guard(async e => {
+    const v = e.target.closest('[data-view]')?.dataset.view;
+    if (v) { const k = (await get(ref(db, `kyc/${v}`))).val() || {}; $('pModalTitle').textContent = 'KYC — ' + (k.name || ''); $('pModalBody').innerHTML = `<p>PAN: <code>${esc(k.pan)}</code></p><img src="${esc(k.doc)}" style="max-width:100%;border-radius:8px">`; modal('pModal').show(); return; }
+    const ok = e.target.closest('[data-ok]')?.dataset.ok, no = e.target.closest('[data-no]')?.dataset.no, uid = ok || no; if (!uid) return;
+    const note = ok ? '' : prompt('Reject reason:', 'PAN photo clear nahi hai'); if (note === null) return;
+    const lock = await tx(`kyc/${uid}`, k => { if (!k || k.status !== 'pending') return; k.status = ok ? 'approved' : 'rejected'; k.note = note; k.reviewedAt = Date.now(); return k; });
+    if (!lock.committed) { toast('Already processed', false); loadKyc(); return; }
+    await update(ref(db, `users/${uid}`), { kycStatus: ok ? 'approved' : 'rejected', kycNote: ok ? null : note });
+    await push(ref(db, `userNotifications/${uid}`), { title: ok ? '✅ KYC approved' : '❌ KYC rejected', message: ok ? 'Ab aap withdraw kar sakte hain.' : note, timestamp: Date.now() });
+    logAdmin(ok ? 'kyc_approve' : 'kyc_reject', `${uid} ${note}`); toast(ok ? 'KYC approved ✔' : 'Rejected'); loadKyc(); xBadges();
+});
+
+// ---------- result proofs ----------
+async function loadProofs() {
+    const all = (await get(ref(db, 'proofs'))).val() || {}, f = $('prFilter').value, rows = [];
+    Object.entries(all).forEach(([tid, m]) => Object.entries(m || {}).forEach(([uid, p]) => { if (!f || p.status === f) rows.push({ tid, uid, ...p }); }));
+    rows.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    $('prBody').innerHTML = rows.map(p => `<tr><td>${esc(p.tname || p.tid)}</td><td>${esc(p.name || p.uid)}</td><td><img src="${esc(p.img)}" data-pv="${p.tid}|${p.uid}" style="height:48px;border-radius:6px;cursor:pointer"></td><td>${esc(p.note)}</td><td>${fmtDT(p.ts)}</td><td><span class="pill p-${p.status === 'verified' ? 'approved' : esc(p.status)}">${esc(p.status)}</span></td><td class="text-nowrap">${p.status === 'pending' ? `<button class="btn btn-sm btn-success" data-pk="${p.tid}|${p.uid}|verified">Verify</button> <button class="btn btn-sm btn-danger" data-pk="${p.tid}|${p.uid}|rejected">Reject</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center" style="color:var(--muted)">No proofs.</td></tr>';
+}
+$('prFilter').onchange = guard(loadProofs);
+$('prBody').onclick = guard(async e => {
+    const v = e.target.closest('[data-pv]')?.dataset.pv; if (v) { const [t, u] = v.split('|'); const p = (await get(ref(db, `proofs/${t}/${u}`))).val() || {}; $('pModalTitle').textContent = 'Proof — ' + (p.name || ''); $('pModalBody').innerHTML = `<p>${esc(p.note)}</p><img src="${esc(p.img)}" style="max-width:100%;border-radius:8px">`; modal('pModal').show(); return; }
+    const k = e.target.closest('[data-pk]')?.dataset.pk; if (!k) return; const [t, u, st] = k.split('|');
+    await update(ref(db, `proofs/${t}/${u}`), { status: st, reviewedAt: Date.now() }); logAdmin('proof_' + st, `${t} ${u}`); toast('Saved ✔'); loadProofs(); xBadges();
+});
+
+// ---------- scheduled / repeating tournaments ----------
+async function makeTemplate(id) {
+    const t = (await get(ref(db, `tournaments/${id}`))).val(); if (!t) return;
+    const rep = (prompt(`"${t.name}" ko repeat karein?\nType: daily ya weekly`, 'daily') || '').trim().toLowerCase(); if (!['daily', 'weekly'].includes(rep)) { if (rep) toast('daily ya weekly likho', false); return; }
+    const data = { ...t }; ['registeredPlayers', 'paid', 'winners', 'resultDeclared', 'resultLock', 'resultAt', 'refunded', 'chat', 'createdAt', 'status', 'startTime', 'roomId', 'roomPassword', 'liveScore', 'templateId'].forEach(k => delete data[k]);
+    data.showIdPass = false; const step = rep === 'weekly' ? 7 * 864e5 : 864e5; let next = Number(t.startTime) || Date.now(); while (next <= Date.now()) next += step;
+    await push(ref(db, 'templates'), { label: t.name, repeat: rep, nextRun: next, active: true, data, createdAt: Date.now() });
+    logAdmin('template_create', `${t.name} ${rep}`); toast(`Repeat set (${rep}) ✔ — next ${fmtDT(next)}`); runTemplates().catch(() => { });
+}
+async function runTemplates() {
+    const all = (await get(ref(db, 'templates'))).val() || {}; let made = 0; const horizon = Date.now() + 48 * 3600000;
+    for (const [id, tp] of Object.entries(all)) {
+        if (tp.active === false) continue;
+        const step = tp.repeat === 'weekly' ? 7 * 864e5 : 864e5; let when = Number(tp.nextRun) || 0, n = 0;
+        while (when && when <= horizon && n++ < 10) {
+            const w = when, lock = await tx(`templates/${id}`, t => { if (!t || t.nextRun !== w) return; t.nextRun = w + step; t.lastRun = Date.now(); return t; });
+            if (!lock.committed) break;
+            if (w >= Date.now() - 3600000) { await push(ref(db, 'tournaments'), { ...tp.data, startTime: w, status: 'upcoming', createdAt: Date.now(), templateId: id }); made++; }
+            when = w + step;
+        }
+    }
+    return made;
+}
+async function loadSched() {
+    const all = (await get(ref(db, 'templates'))).val() || {};
+    $('schedBody').innerHTML = Object.entries(all).map(([id, t]) => `<tr><td>${esc(t.label)}</td><td>${esc(t.repeat)}</td><td>${fmtDT(t.nextRun)}</td><td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" data-sact="${id}" ${t.active !== false ? 'checked' : ''}></div></td><td><button class="btn btn-sm btn-outline-danger" data-sdel="${id}">Del</button></td></tr>`).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--muted)">Koi repeat tournament nahi. Tournaments tab me "Repeat" dabao.</td></tr>';
+}
+$('schedBody').onchange = guard(async e => { const id = e.target.dataset.sact; if (id) await update(ref(db, `templates/${id}`), { active: e.target.checked }); });
+$('schedBody').onclick = guard(async e => { const id = e.target.closest('[data-sdel]')?.dataset.sdel; if (id && confirm('Delete repeat template?')) { await remove(ref(db, `templates/${id}`)); logAdmin('template_delete', id); loadSched(); } });
+$('schedRun').onclick = guard(async () => { const n = await runTemplates(); toast(n ? `${n} tournament(s) bane ✔` : 'Abhi kuch banane layak nahi'); loadSched(); });
+
+// ---------- ops: referral payout, weekly cashback ----------
+async function loadOps() {
+    const box = $('refStatsBox'); if (!box) return;
+    const [r, u] = await Promise.all([get(ref(db, 'referrals')), get(query(ref(db, 'users'), limitToLast(500)))]);
+    const all = r.val() || {}, users = u.val() || {}; let total = 0, paid = 0; const rows = [];
+    Object.entries(all).forEach(([uid, kids]) => { const l = Object.values(kids || {}), p = l.filter(x => x.paid).length; total += l.length; paid += p; rows.push({ uid, n: l.length, p }); });
+    rows.sort((x, y) => y.n - x.n);
+    box.innerHTML = `<div class="row g-2 mb-2 text-center"><div class="col-4"><div class="stat"><b>${total}</b><span>Total referrals</span></div></div><div class="col-4"><div class="stat"><b>${paid}</b><span>Paid</span></div></div><div class="col-4"><div class="stat"><b>${total - paid}</b><span>Pending</span></div></div></div>` +
+        (rows.length ? `<div class="table-responsive"><table class="table"><thead><tr><th>Referrer</th><th>Friends</th><th>Paid</th></tr></thead><tbody>${rows.slice(0, 10).map(x => `<tr><td>${esc(users[x.uid]?.ign || users[x.uid]?.email || x.uid)}</td><td>${x.n}</td><td>${x.p}</td></tr>`).join('')}</tbody></table></div>` : '<p class="mb-0">Abhi koi referral nahi.</p>');
+}
+$('opRef').onclick = guard(async () => {
+    const st = (await get(ref(db, 'settings'))).val() || {}, bonus = Number(st.referralBonus) || 0; if (!(bonus > 0)) { toast('Settings me Referral bonus ₹ daalo', false); return; }
+    const all = (await get(ref(db, 'referrals'))).val() || {}, ms = xJ(st.referralMilestones, { 5: 20, 10: 50 });
+    let pending = 0; Object.values(all).forEach(k => Object.values(k || {}).forEach(r => { if (!r.paid) pending++; }));
+    if (!pending) { toast('Koi pending referral nahi'); return; }
+    if (!confirm(`${pending} referral(s) ko ₹${bonus} each pay karein?`)) return;
+    let n = 0, tot = 0;
+    for (const [ru, kids] of Object.entries(all)) for (const [nu, r] of Object.entries(kids || {})) {
+        if (r.paid) continue;
+        const lock = await tx(`referrals/${ru}/${nu}`, x => { if (!x || x.paid) return; x.paid = true; x.paidAt = Date.now(); x.amount = bonus; return x; }); if (!lock.committed) continue;
+        let mb = 0; const res = await tx(`users/${ru}`, u => { if (!u) return u; u.referralCount = (u.referralCount || 0) + 1; mb = Number(ms[u.referralCount]) || 0; const add = bonus + mb; u.balance = (u.balance || 0) + add; u.bonusCash = (u.bonusCash || 0) + add; u.referralEarnings = (u.referralEarnings || 0) + add; return u; });
+        await addTxn(ru, 'referral_bonus', bonus, `Referral bonus: ${r.name || 'friend'}`); if (mb > 0) await addTxn(ru, 'referral_bonus', mb, 'Referral milestone bonus');
+        const uv = res.snapshot.val() || {}; await update(ref(db, `leaderboard/${ru}`), { referralCount: uv.referralCount || 0, displayName: uv.displayName || 'Player', ign: uv.ign || null });
+        n++; tot += bonus + mb;
+    }
+    logAdmin('referral_payout', `${n} paid, total ${tot}`); toast(`${n} referral pay ho gaye (${money(tot)}) ✔`);
+});
+$('opCash').onclick = guard(async () => {
+    const st = (await get(ref(db, 'settings'))).val() || {}, pct = Number(st.cashbackPct) || 0, cap = Number(st.cashbackMax) || 0; if (!(pct > 0)) { toast('Settings me Cashback % daalo', false); return; }
+    const wk = wkKey(), since = Date.now() - 7 * 864e5, us = (await get(query(ref(db, 'users'), limitToLast(500)))).val() || {}, ids = Object.keys(us).filter(u => !us[u].banned);
+    if (!confirm(`Pichle 7 din ke net loss par ${pct}% cashback (${wk}). ${ids.length} users check honge. Continue?`)) return;
+    let n = 0, tot = 0;
+    for (let i = 0; i < ids.length; i += 15) {
+        await Promise.all(ids.slice(i, i + 15).map(async uid => {
+            const tr = Object.values((await get(query(ref(db, `transactions/${uid}`), limitToLast(150)))).val() || {}).filter(t => (t.timestamp || 0) >= since);
+            const spent = tr.filter(t => t.type === 'tournament_join').reduce((a, t) => a + Math.abs(t.amount || 0), 0), won = tr.filter(t => t.type === 'tournament_win').reduce((a, t) => a + (t.amount || 0), 0);
+            let cb = Math.floor((spent - won) * pct / 100); if (cap > 0) cb = Math.min(cb, cap); if (cb <= 0) return;
+            const lock = await tx(`cashbackRuns/${wk}/${uid}`, x => { if (x) return; return { amount: cb, ts: Date.now() }; }); if (!lock.committed) return;
+            await tx(`users/${uid}`, u => { if (!u) return u; u.balance = (u.balance || 0) + cb; u.bonusCash = (u.bonusCash || 0) + cb; return u; });
+            await addTxn(uid, 'cashback', cb, `Weekly cashback ${pct}%`); await push(ref(db, `userNotifications/${uid}`), { title: '💸 Cashback mila', message: `${money(cb)} weekly cashback aapke wallet me add ho gaya.`, timestamp: Date.now() });
+            n++; tot += cb;
+        }));
+    }
+    logAdmin('weekly_cashback', `${wk} ${n} users, total ${tot}`); toast(`${n} users ko cashback (${money(tot)}) ✔`);
+});
+
+// ---------- room send + admin chat ----------
+async function sendRoom(id) {
+    const t = (await get(ref(db, `tournaments/${id}`))).val() || {}, ids = Object.keys(t.registeredPlayers || {}); if (!ids.length) { toast('Koi player nahi', false); return; }
+    let rid = t.roomId, rp = t.roomPassword;
+    if (!rid || !rp) { if (!confirm('Room ID/Password khali hai — auto generate karein?')) return; rid = rid || String(Math.floor(1e7 + Math.random() * 9e7)); rp = rp || Math.random().toString(36).slice(2, 8).toUpperCase(); }
+    if (!confirm(`${ids.length} player(s) ko Room ID ${rid} / Pass ${rp} bhejein?`)) return;
+    await update(ref(db, `tournaments/${id}`), { roomId: rid, roomPassword: rp, showIdPass: true, roomRevealMins: 0 });
+    await Promise.all(ids.map(uid => push(ref(db, `userNotifications/${uid}`), { title: '🔑 Room ready: ' + t.name, message: `Room ID: ${rid}\nPassword: ${rp}\nStart: ${fmtDT(t.startTime)}`, timestamp: Date.now() })));
+    await push(ref(db, `tournaments/${id}/chat`), { admin: true, name: 'Admin', text: `Room ID: ${rid} | Password: ${rp}`, ts: Date.now() });
+    logAdmin('room_send', `${id} ${rid}`); toast('Room ID sab players ko bhej diya ✔');
+}
+let admChatOff = null;
+function adminChat(id, name) {
+    $('pModalTitle').textContent = '💬 ' + name;
+    $('pModalBody').innerHTML = '<div id="acBox" style="height:45vh;overflow-y:auto" class="mb-2"></div><div class="input-group"><input id="acIn" class="form-control" maxlength="200" placeholder="Admin message to all players…"><button class="btn btn-acc" id="acSend">Send</button></div>';
+    modal('pModal').show();
+    if (admChatOff) admChatOff();
+    admChatOff = onValue(query(ref(db, `tournaments/${id}/chat`), limitToLast(80)), s => {
+        const l = Object.entries(s.val() || {}).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
+        $('acBox').innerHTML = l.map(([k, m]) => `<div class="p-2 mb-1 small d-flex justify-content-between" style="background:${m.admin ? 'rgba(250,204,21,.12)' : 'var(--bg)'};border-radius:8px"><div><b>${m.admin ? '📢 Admin' : esc(m.name)}</b> <span style="color:var(--muted)">${fmtDT(m.ts)}</span><div style="white-space:pre-wrap">${esc(m.text)}</div></div><button class="btn btn-sm btn-link text-danger p-0" data-cdel="${k}">✕</button></div>`).join('') || '<p style="color:var(--muted)">No messages.</p>';
+        $('acBox').scrollTop = $('acBox').scrollHeight;
+    });
+    $('acBox').onclick = guard(async e => { const k = e.target.closest('[data-cdel]')?.dataset.cdel; if (k) await remove(ref(db, `tournaments/${id}/chat/${k}`)); });
+    const send = guard(async () => { const t = val('acIn'); if (!t) return; await push(ref(db, `tournaments/${id}/chat`), { admin: true, name: 'Admin', text: t, ts: Date.now() }); $('acIn').value = ''; });
+    $('acSend').onclick = send; $('acIn').onkeydown = e => { if (e.key === 'Enter') send(); };
+    $('pModal').addEventListener('hidden.bs.modal', () => { if (admChatOff) { admChatOff(); admChatOff = null; } }, { once: true });
+}
+
+// ---------- bulk result CSV ----------
+function parseCsv(txt) { return txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => l.split(',').map(x => x.trim().replace(/^"|"$/g, ''))); }
+$('rCsvTpl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['gameId_or_ign,kills,rank\n123456789,5,1\nPlayerTwo,3,2\n'], { type: 'text/csv' })); a.download = 'result_template.csv'; a.click(); };
+$('rCsv').onchange = guard(async e => {
+    const f = e.target.files[0]; if (!f) return; const rows = parseCsv(await f.text()); e.target.value = '';
+    const body = $('rModalBody'); let ok = 0; const miss = [];
+    rows.forEach((r, i) => {
+        if (i === 0 && isNaN(Number(r[1]))) return;
+        const key = String(r[0] || '').toLowerCase(), idx = resultPlayers.findIndex(p => String(p.gameId).toLowerCase() === key || String(p.ign || p.name || '').toLowerCase() === key);
+        if (idx < 0) { miss.push(r[0]); return; }
+        const tr = body.querySelector(`tr[data-i="${idx}"]`); if (!tr) return;
+        tr.querySelector('.r-kills').value = Number(r[1]) || 0; const rk = tr.querySelector('.r-rank'); rk.value = Number(r[2]) || 0; rk.dispatchEvent(new Event('input', { bubbles: true })); ok++;
+    });
+    toast(`${ok} row import ho gayi` + (miss.length ? ` · ${miss.length} match nahi hui: ${miss.slice(0, 4).join(', ')}` : ''), !miss.length);
+});
+
+// ---------- dashboard charts ----------
+function drawBars(id, days, series) {
+    const c = $(id); if (!c) return; const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 320, H = 170; c.width = W * dpr; c.height = H * dpr; const x = c.getContext('2d'); x.scale(dpr, dpr); x.clearRect(0, 0, W, H);
+    const max = Math.max(1, ...series.flatMap(s => s[1])), n = days.length, pad = 26, bw = (W - pad) / n, sw = Math.max(2, (bw - 4) / series.length);
+    x.font = '10px sans-serif'; x.fillStyle = '#94A3B8'; x.strokeStyle = '#334155'; x.lineWidth = 1;
+    for (let g = 0; g <= 3; g++) { const y = 10 + (H - 34) * (1 - g / 3); x.beginPath(); x.moveTo(pad, y); x.lineTo(W, y); x.stroke(); x.fillText(max * g / 3 >= 1000 ? Math.round(max * g / 3 / 1000) + 'k' : Math.round(max * g / 3), 0, y + 3); }
+    days.forEach((d, i) => {
+        series.forEach((s, j) => { const h = (H - 34) * (s[1][i] / max); x.fillStyle = s[2]; x.fillRect(pad + i * bw + 2 + j * sw, H - 24 - h, sw - 1, h); });
+        if (i % 2 === 0) { x.fillStyle = '#94A3B8'; x.fillText(d.getDate() + '/' + (d.getMonth() + 1), pad + i * bw, H - 8); }
+    });
+}
+function drawCharts(users, wds, deps) {
+    const days = [...Array(14)].map((_, i) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 13 + i); return d; });
+    const idx = ts => { const t = new Date(Number(ts)).setHours(0, 0, 0, 0); return days.findIndex(d => d.getTime() === t); };
+    const dep = Array(14).fill(0), wd = Array(14).fill(0), nu = Array(14).fill(0);
+    Object.values(deps).filter(x => x.status === 'approved').forEach(x => { const i = idx(x.timestamp); if (i >= 0) dep[i] += x.amount || 0; });
+    wds.filter(x => x.status === 'approved').forEach(x => { const i = idx(x.processedAt || x.requestTimestamp); if (i >= 0) wd[i] += x.amount || 0; });
+    users.forEach(u => { const i = idx(u.createdAt); if (i >= 0) nu[i]++; });
+    drawBars('chMoney', days, [['Deposits', dep, '#10B981'], ['Withdrawals', wd, '#EF4444']]); drawBars('chUsers', days, [['New users', nu, '#FACC15']]);
+}
+
+// ---------- logs ----------
+$('lgSearch').oninput = guard(loadLogs);
+async function loadLogs() {
+    const all = (await get(query(ref(db, 'adminLogs'), limitToLast(100)))).val() || {};
+    $('lgBody').innerHTML = Object.values(all).filter(l => JSON.stringify(l).toLowerCase().includes($('lgSearch').value.trim().toLowerCase())).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).map(l => `<tr><td>${fmtDT(l.timestamp)}</td><td>${esc(l.admin)}</td><td>${esc(l.action)}</td><td>${esc(l.details)}</td></tr>`).join('') || '<tr><td colspan="4" class="text-center" style="color:var(--muted)">No logs.</td></tr>';
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
